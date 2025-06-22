@@ -3,6 +3,7 @@ package tracing
 
 import (
 	"log"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
@@ -25,7 +26,10 @@ func InitTracerProvider(serviceName, jaegerEndpoint string) (*sdktrace.TracerPro
 		// 始终对 Span 进行采样，在生产环境中应使用更复杂的采样策略
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		// 使用批处理 Span 处理器，提高性能
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(exporter,
+			sdktrace.WithBatchTimeout(5*time.Second),
+			sdktrace.WithMaxExportBatchSize(512),
+		),
 		// 设置服务名等资源属性，这对于在 Jaeger UI 中识别服务至关重要
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,

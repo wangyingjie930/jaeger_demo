@@ -70,8 +70,8 @@ for service in "${SERVICES[@]}"; do
     
     # 启动服务
     cd "$service_path"
-    go build -o "${service_name}"
-    "./${service_name}" > "$LOG_DIR/$service_name.log" 2>&1 &
+    go build -o "$SCRIPT_DIR/deploy/${service_name}"
+    "$SCRIPT_DIR/deploy/${service_name}" > "$LOG_DIR/$service_name.log" 2>&1 &
     SERVICE_PID=$!
     cd "$SCRIPT_DIR" > /dev/null
     
