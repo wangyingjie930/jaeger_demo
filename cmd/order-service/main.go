@@ -77,13 +77,14 @@ func handleCreateComplexOrder(w http.ResponseWriter, r *http.Request) {
 		attribute.StringSlice("items", items),
 	)
 
-	// ... (前面的逻辑保持不变)
 	// 1. 前置检查 (串行)
 	if err := callService(ctx, fraudDetectionServiceURL, r.URL.Query()); err != nil {
 		span.RecordError(err)
 		http.Error(w, "Fraud check failed", http.StatusBadRequest)
 		return
 	}
+
+	span.AddEvent("Starting inventory check process")
 
 	// 2. 库存检查 (循环)
 	for _, item := range items {
@@ -97,6 +98,8 @@ func handleCreateComplexOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	span.AddEvent("Inventory check completed successfully")
+
 	// 3. 数据聚合 (并行)
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -104,6 +107,7 @@ func handleCreateComplexOrder(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer wg.Done()
+		span.AddEvent("Starting pricing and shipping calculation")
 		q := url.Values{}
 		q.Set("is_vip", isVIP)
 		if err := callService(ctx, pricingServiceURL, q); err != nil {
@@ -113,6 +117,7 @@ func handleCreateComplexOrder(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer wg.Done()
+		span.AddEvent("Pricing and shipping calculation finished")
 		q := url.Values{}
 		if err := callService(ctx, shippingServiceURL, q); err != nil {
 			errs <- fmt.Errorf("shipping service error: %w", err)
