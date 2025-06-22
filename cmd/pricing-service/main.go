@@ -33,14 +33,14 @@ func handleCalculatePrice(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	isVIP := r.URL.Query().Get("is_vip")
+	userID := r.URL.Query().Get("user_id")
 	span.SetAttributes(attribute.Bool("user.is_vip", isVIP == "true"))
 
 	// <<<<<<< 复杂故障注入点 >>>>>>>>>
-	if isVIP == "true" {
-		log.Println("Injecting fault for VIP user pricing")
+	if userID == "user-normal-456" {
 		// 模拟复杂计算导致的超时
 		time.Sleep(600 * time.Millisecond)
-		err := fmt.Errorf("unimplemented discount logic for VIP users")
+		err := fmt.Errorf("random error")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)

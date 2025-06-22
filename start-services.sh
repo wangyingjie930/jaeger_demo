@@ -16,16 +16,19 @@ NC='\033[0m' # No Color
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 服务配置
+# <<<<<<< 改造点: 增加新服务 >>>>>>>>>
 SERVICES=(
     "api-gateway:8080"
     "order-service:8081"
-    "shipping-service:8082"
-    "fraud-detection-service:8083"
+    "inventory-service:8082"
+    "notification-service:8083" # 端口改为消费Kafka，脚本中保留便于管理
     "pricing-service:8084"
-    "notification-service:8085"
-    "inventory-service:8086"
+    "fraud-detection-service:8085"
+    "shipping-service:8086"
+    "promotion-service:8087"  # 新增
 )
+# <<<<<<< 改造点结束 >>>>>>>>>
+
 
 # 日志文件目录 (使用绝对路径)
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -33,70 +36,93 @@ PID_FILE="$SCRIPT_DIR/services.pid"
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
+# 创建部署目录
+mkdir -p "$SCRIPT_DIR/deploy"
 
 echo -e "${BLUE}🚀 开始启动 Jaeger Demo 微服务...${NC}"
 
-# 检查是否已经有服务在运行
-if [ -f "$PID_FILE" ]; then
-    echo -e "${YELLOW}⚠️  检测到已有服务在运行，请先运行 stop-services.sh${NC}"
-    exit 1
-fi
+# 清理旧的PID文件
+rm -f "$PID_FILE"
+
+# 检查并杀死可能残留的旧进程
+echo -e "${YELLOW}🔧 正在清理可能残留的旧服务进程...${NC}"
+for service_config in "${SERVICES[@]}"; do
+    service_name="${service_config%%:*}"
+    binary_path="$SCRIPT_DIR/deploy/${service_name}"
+    if pgrep -f "$binary_path" > /dev/null; then
+        pkill -f "$binary_path"
+        echo -e "${GREEN}✅ 已停止残留的 $service_name 服务${NC}"
+        sleep 1
+    fi
+done
+
 
 # 启动 Jaeger (如果安装了)
-echo -e "${BLUE}📊 启动 Jaeger...${NC}"
-if command -v jaeger-all-in-one &> /dev/null; then
-    jaeger-all-in-one --collector.http-port=14268 --collector.grpc-port=14250 --agent.grpc-port=14250 --agent.http-port=14268 --query.port=16686 --query.base-path=/ &
-    JAEGER_PID=$!
-    echo $JAEGER_PID >> "$PID_FILE"
-    echo -e "${GREEN}✅ Jaeger 已启动 (PID: $JAEGER_PID)${NC}"
+echo -e "${BLUE}📊 检查 Jaeger 状态...${NC}"
+if ! curl -s http://localhost:16686 > /dev/null; then
+    echo -e "${YELLOW}⚠️  Jaeger 未运行，尝试启动...${NC}"
+    if command -v jaeger-all-in-one &> /dev/null; then
+        jaeger-all-in-one --collector.http-port=14268 --query.port=16686 > "$LOG_DIR/jaeger.log" 2>&1 &
+        JAEGER_PID=$!
+        echo $JAEGER_PID >> "$PID_FILE"
+        echo -e "${GREEN}✅ Jaeger 已启动 (PID: $JAEGER_PID)${NC}"
+        sleep 3 # 等待Jaeger启动
+    else
+        echo -e "${YELLOW}⚠️  Jaeger 命令不存在。请手动启动或使用 Docker: \ndocker run -d --name jaeger -p 16686:16686 -p 14268:14268 jaegertracing/all-in-one:latest${NC}"
+    fi
 else
-    echo -e "${YELLOW}⚠️  Jaeger 未安装，请手动启动或使用 Docker: docker run -d --name jaeger -p 16686:16686 -p 14268:14268 jaegertracing/all-in-one:latest${NC}"
+    echo -e "${GREEN}✅ Jaeger 已在运行中${NC}"
 fi
 
-# 启动所有微服务
-for service in "${SERVICES[@]}"; do
-    IFS=':' read -r service_name port <<< "$service"
-    
-    echo -e "${BLUE}🔧 启动 $service_name (端口: $port)...${NC}"
-    
-    # 构建服务路径
+# 编译和启动所有微服务
+for service_config in "${SERVICES[@]}"; do
+    service_name="${service_config%%:*}"
+    port="${service_config##*:}"
+
+    echo -e "${BLUE}🔧 编译并启动 $service_name (端口: $port)...${NC}"
+
     service_path="$SCRIPT_DIR/cmd/$service_name"
-    
-    # 检查服务目录是否存在
+    binary_path="$SCRIPT_DIR/deploy/${service_name}"
+
     if [ ! -d "$service_path" ]; then
-        echo -e "${RED}❌ 服务目录不存在: $service_path${NC}"
-        continue
+        # notification-service 没有 main.go 了，但目录可能存在
+        if [ "$service_name" == "notification-service" ]; then
+             echo -e "${YELLOW}🔍 $service_name 是一个Kafka消费者，后台运行，跳过HTTP端口检查。${NC}"
+        else
+            echo -e "${RED}❌ 服务目录不存在: $service_path${NC}"
+            continue
+        fi
     fi
-    
-    # 启动服务
-    cd "$service_path"
-    go build -o "$SCRIPT_DIR/deploy/${service_name}"
-    "$SCRIPT_DIR/deploy/${service_name}" > "$LOG_DIR/$service_name.log" 2>&1 &
+
+    # 编译
+    (cd "$service_path" && go build -o "$binary_path")
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ 编译失败: $service_name${NC}"
+        exit 1
+    fi
+
+    # 启动
+    "$binary_path" > "$LOG_DIR/$service_name.log" 2>&1 &
     SERVICE_PID=$!
-    cd "$SCRIPT_DIR" > /dev/null
-    
-    # 保存PID
     echo $SERVICE_PID >> "$PID_FILE"
-    
-    echo -e "${GREEN}✅ $service_name 已启动 (PID: $SERVICE_PID, 端口: $port)${NC}"
-    
-    # 等待服务启动
-    sleep 2
+
+    echo -e "${GREEN}✅ $service_name 已启动 (PID: $SERVICE_PID)${NC}"
+    sleep 1
 done
 
 echo -e "${GREEN}🎉 所有服务启动完成！${NC}"
-echo -e "${BLUE}📋 服务状态:${NC}"
+echo -e "${BLUE}📋 服务状态和访问点:${NC}"
 echo -e "  - Jaeger UI: http://localhost:16686"
 echo -e "  - API Gateway: http://localhost:8080"
-echo -e "  - Order Service: http://localhost:8081"
-echo -e "  - Shipping Service: http://localhost:8082"
-echo -e "  - Fraud Detection Service: http://localhost:8083"
-echo -e "  - Pricing Service: http://localhost:8084"
-echo -e "  - Notification Service: http://localhost:8085"
-echo -e "  - Inventory Service: http://localhost:8086"
+echo ""
+echo -e "${YELLOW}💡 测试指令示例:${NC}"
+echo -e "  ${GREEN}正常普通用户订单:${NC}"
+echo -e "  curl 'http://localhost:8080/create_complex_order?userID=user-normal-4567&is_vip=false&items=item-a,item-b'"
+echo -e "  ${GREEN}VIP用户大促订单:${NC}"
+echo -e "  curl 'http://localhost:8080/create_complex_order?userID=user-vip-789&is_vip=true&items=item-a,item-b'"
+echo -e "  ${RED}价格服务故障的VIP订单 (触发SAGA补偿):${NC}"
+echo -e "  curl 'http://localhost:8080/create_complex_order?userID=user-vip-789&is_vip=true&items=item-a,item-faulty-123&quantity=11'"
+echo -e "  curl 'http://localhost:8080/create_complex_order?userID=user-normal-456&is_vip=false&items=item-a,item-b'"
+echo ""
 echo -e "${BLUE}📁 日志文件位置: $LOG_DIR${NC}"
 echo -e "${BLUE}🛑 停止服务请运行: ./stop-services.sh${NC}"
-
-
-echo "正常: curl 'http://localhost:8080/create_complex_order?userID=user-789&is_vip=false&items=item-a,item-b'"
-echo "异常: curl 'http://localhost:8080/create_complex_order?userID=user-vip-123&is_vip=true&items=item-a,item-b'"

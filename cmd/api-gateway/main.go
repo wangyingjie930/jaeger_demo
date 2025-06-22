@@ -10,6 +10,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
 )
 
@@ -19,6 +20,13 @@ const (
 	orderServiceBaseURL = "http://localhost:8081"
 )
 
+// <<<<<<< 新增特性开关 >>>>>>>>>
+var featureFlags = map[string]bool{
+	"PROMO_VIP_SUMMER_2025": true, // 硬编码一个特性开关
+}
+
+// <<<<<<< 新增特性开关 >>>>>>>>>
+
 func main() {
 	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
 	if err != nil {
@@ -26,7 +34,6 @@ func main() {
 	}
 	defer tp.Shutdown(context.Background())
 
-	// 新增的复杂订单路由
 	http.HandleFunc("/create_complex_order", complexOrderHandler)
 	log.Println("API Gateway listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -34,12 +41,33 @@ func main() {
 
 func complexOrderHandler(w http.ResponseWriter, r *http.Request) {
 	tracer := otel.Tracer(serviceName)
-	ctx, span := tracer.Start(r.Context(), "api-gateway.ComplexOrderHandler")
+	// 初始上下文
+	ctx := r.Context()
+
+	// <<<<<<< 改造点: Feature Flag 和 Baggage 注入 >>>>>>>>>
+	isVIP := r.URL.Query().Get("is_vip") == "true"
+	isPromotionActive := featureFlags["PROMO_VIP_SUMMER_2025"]
+
+	ctx, span := tracer.Start(ctx, "api-gateway.ComplexOrderHandler")
+
+	span.SetAttributes(
+		attribute.Bool("user.is_vip", isVIP),
+		attribute.Bool("feature_flag.PROMO_VIP_SUMMER_2025", isPromotionActive),
+	)
+
+	// 如果是VIP用户且活动开启，则通过Baggage向下游传递业务信息
+	if isVIP && isPromotionActive {
+		log.Println("VIP user detected, activating promotion baggage.")
+		promoBaggage, _ := baggage.NewMember("promotion_id", "VIP_SUMMER_SALE")
+		b, _ := baggage.FromContext(ctx).SetMember(promoBaggage)
+		ctx = baggage.ContextWithBaggage(ctx, b)
+		span.AddEvent("Baggage with promotion_id injected.")
+	}
+	// <<<<<<< 改造点结束 >>>>>>>>>
 	defer span.End()
 
-	// 构建向下游服务传递的 URL，携带所有查询参数
 	downstreamURL, _ := url.Parse(orderServiceBaseURL + "/create_complex_order")
-	downstreamURL.RawQuery = r.URL.RawQuery // 直接复制所有查询参数
+	downstreamURL.RawQuery = r.URL.RawQuery
 
 	span.SetAttributes(
 		attribute.String("http.method", "GET"),
@@ -52,7 +80,7 @@ func complexOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 注入追踪上下文
+	// 注入追踪上下文(包括Baggage)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	client := &http.Client{}
