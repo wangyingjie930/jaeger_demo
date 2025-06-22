@@ -1,0 +1,56 @@
+// cmd/pricing-service/main.go
+package main
+
+import (
+	"context"
+	"fmt"
+	"jaeger-demo/internal/tracing"
+	"log"
+	"net/http"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+)
+
+const serviceName = "pricing-service"
+
+var tracer = otel.Tracer(serviceName)
+
+func main() {
+	tp, _ := tracing.InitTracerProvider(serviceName, "http://localhost:14268/api/traces")
+	defer tp.Shutdown(context.Background())
+	http.HandleFunc("/calculate_price", handleCalculatePrice)
+	log.Println("Pricing Service listening on :8084")
+	log.Fatal(http.ListenAndServe(":8084", nil))
+}
+
+func handleCalculatePrice(w http.ResponseWriter, r *http.Request) {
+	ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx, span := tracer.Start(ctx, "pricing-service.CalculatePrice")
+	defer span.End()
+
+	isVIP := r.URL.Query().Get("is_vip")
+	span.SetAttributes(attribute.Bool("user.is_vip", isVIP == "true"))
+
+	// <<<<<<< 复杂故障注入点 >>>>>>>>>
+	if isVIP == "true" {
+		log.Println("Injecting fault for VIP user pricing")
+		// 模拟复杂计算导致的超时
+		time.Sleep(600 * time.Millisecond)
+		err := fmt.Errorf("unimplemented discount logic for VIP users")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// <<<<<<< 故障注入结束 >>>>>>>>>
+
+	// 正常逻辑
+	time.Sleep(150 * time.Millisecond) // 模拟正常计算耗时
+	span.AddEvent("Standard price calculated")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"price": 99.99}`))
+}
