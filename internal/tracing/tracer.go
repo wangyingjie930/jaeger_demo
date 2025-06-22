@@ -2,6 +2,8 @@
 package tracing
 
 import (
+	"context"
+	"go.opentelemetry.io/otel/trace"
 	"log"
 	"time"
 
@@ -44,4 +46,13 @@ func InitTracerProvider(serviceName, jaegerEndpoint string) (*sdktrace.TracerPro
 
 	log.Printf("Tracing initialized for service '%s' exporting to '%s'", serviceName, jaegerEndpoint)
 	return tp, nil
+}
+
+// GetTraceIDFromContext 从 Context 中提取 Trace ID 字符串
+func GetTraceIDFromContext(ctx context.Context) string {
+	spanCtx := trace.SpanContextFromContext(ctx)
+	if spanCtx.HasTraceID() {
+		return spanCtx.TraceID().String()
+	}
+	return ""
 }
