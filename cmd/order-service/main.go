@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -26,26 +27,22 @@ import (
 )
 
 const (
-	serviceName              = "order-service"
-	jaegerEndpoint           = "http://localhost:14268/api/traces"
-	fraudDetectionServiceURL = "http://localhost:8085/check"
-	// <<<<<<< 改造点: 更新服务URL >>>>>>>>>
-	inventoryReserveURL = "http://localhost:8082/reserve_stock"
-	inventoryReleaseURL = "http://localhost:8082/release_stock"
-	pricingServiceURL   = "http://localhost:8084/calculate_price"
-	promotionServiceURL = "http://localhost:8087/get_promo_price" // 新增
-	shippingServiceURL  = "http://localhost:8086/get_quote"
-	// <<<<<<< 改造点结束 >>>>>>>>>
+	serviceName       = "order-service"
+	notificationTopic = "notifications"
 )
 
 var (
+	jaegerEndpoint           = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+	fraudDetectionServiceURL = getEnv("FRAUD_DETECTION_SERVICE_URL", "http://localhost:8085/check")
+	inventoryReserveURL      = getEnv("INVENTORY_RESERVE_URL", "http://localhost:8082/reserve_stock")
+	inventoryReleaseURL      = getEnv("INVENTORY_RELEASE_URL", "http://localhost:8082/release_stock")
+	pricingServiceURL        = getEnv("PRICING_SERVICE_URL", "http://localhost:8084/calculate_price")
+	promotionServiceURL      = getEnv("PROMOTION_SERVICE_URL", "http://localhost:8087/get_promo_price")
+	shippingServiceURL       = getEnv("SHIPPING_SERVICE_URL", "http://localhost:8086/get_quote")
+	kafkaBrokers             = getEnv("KAFKA_BROKERS", "localhost:9092")
+
 	tracer      = otel.Tracer(serviceName)
 	kafkaWriter *kafka.Writer
-)
-
-const (
-	kafkaBrokers      = "localhost:9092"
-	notificationTopic = "notifications"
 )
 
 type NotificationEvent struct {
@@ -306,4 +303,11 @@ func callService(ctx context.Context, serviceURL string, params url.Values) erro
 		return err
 	}
 	return nil
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

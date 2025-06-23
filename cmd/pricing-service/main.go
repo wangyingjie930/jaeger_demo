@@ -7,6 +7,7 @@ import (
 	"jaeger-demo/internal/tracing"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -15,12 +16,24 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
+// getEnv 从环境变量中读取配置。
+// 如果环境变量不存在，则返回提供的默认值。
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
 const serviceName = "pricing-service"
 
-var tracer = otel.Tracer(serviceName)
+var (
+	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+	tracer         = otel.Tracer(serviceName)
+)
 
 func main() {
-	tp, _ := tracing.InitTracerProvider(serviceName, "http://localhost:14268/api/traces")
+	tp, _ := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
 	defer tp.Shutdown(context.Background())
 	http.HandleFunc("/calculate_price", handleCalculatePrice)
 	log.Println("Pricing Service listening on :8084")

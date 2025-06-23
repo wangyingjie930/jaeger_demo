@@ -1,0 +1,154 @@
+version: '3.8'
+
+# ------------------ YAML 锚点定义 (最佳实践) ------------------
+# 将可复用的模板定义在顶层，而不是 services 内部
+
+# 为Go服务的通用构建配置创建一个锚点
+x-go-build: &go-build
+  context: .
+  dockerfile: Dockerfile
+
+# 为Go服务的通用属性 (如依赖) 创建一个锚_go-build
+x-go-service-base: &go-service-base
+  # 使用上面的 build 锚点
+  build:
+    <<: *go-build
+  # 所有服务都依赖于基础设施
+  depends_on:
+    - jaeger
+    - kafka
+  # 将通用的环境变量放在这里
+  environment:
+    JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+    KAFKA_BROKERS: kafka:29092
+
+# ------------------ 服务定义 ------------------
+services:
+  # ------------------ 基础设施服务 ------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    ports:
+      - "14268:14268"
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  # ------------------ Go 微服务定义 ------------------
+
+  api-gateway:
+    # 继承基础模板
+    <<: *go-service-base
+    container_name: api-gateway
+    # 在继承的 build 配置中，添加特定的 args
+    build:
+      args:
+        SERVICE_NAME: api-gateway
+    ports:
+      - "8080:8080"
+    # 在继承的环境变量基础上，添加服务特定的环境变量
+    environment:
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      KAFKA_BROKERS: kafka:29092
+      ORDER_SERVICE_BASE_URL: http://order-service:8081
+
+  order-service:
+    <<: *go-service-base
+    container_name: order-service
+    build:
+      args:
+        SERVICE_NAME: order-service
+    ports:
+      - "8081:8081"
+    environment:
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      KAFKA_BROKERS: kafka:29092
+      FRAUD_DETECTION_SERVICE_URL: http://fraud-detection-service:8085/check
+      INVENTORY_RESERVE_URL: http://inventory-service:8082/reserve_stock
+      INVENTORY_RELEASE_URL: http://inventory-service:8082/release_stock
+      PRICING_SERVICE_URL: http://pricing-service:8084/calculate_price
+      PROMOTION_SERVICE_URL: http://promotion-service:8087/get_promo_price
+      SHIPPING_SERVICE_URL: http://shipping-service:8086/get_quote
+
+  inventory-service:
+    <<: *go-service-base
+    container_name: inventory-service
+    build:
+      args:
+        SERVICE_NAME: inventory-service
+    ports:
+      - "8082:8082"
+
+  notification-service:
+    <<: *go-service-base
+    container_name: notification-service
+    build:
+      args:
+        SERVICE_NAME: notification-service
+
+  pricing-service:
+    <<: *go-service-base
+    container_name: pricing-service
+    build:
+      args:
+        SERVICE_NAME: pricing-service
+    ports:
+      - "8084:8084"
+
+  fraud-detection-service:
+    <<: *go-service-base
+    container_name: fraud-detection-service
+    build:
+      args:
+        SERVICE_NAME: fraud-detection-service
+    ports:
+      - "8085:8085"
+
+  shipping-service:
+    <<: *go-service-base
+    container_name: shipping-service
+    build:
+      args:
+        SERVICE_NAME: shipping-service
+    ports:
+      - "8086:8086"
+
+  promotion-service:
+    <<: *go-service-base
+    container_name: promotion-service
+    build:
+      args:
+        SERVICE_NAME: promotion-service
+    ports:
+      - "8087:8087"
+
+# 定义网络
+networks:
+  default:
+    driver: bridge

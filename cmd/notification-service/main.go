@@ -8,6 +8,8 @@ import (
 	"jaeger-demo/internal/mq"
 	"jaeger-demo/internal/tracing"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -17,16 +19,27 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// getEnv 从环境变量中读取配置。
+// 如果环境变量不存在，则返回提供的默认值。
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
 const (
-	serviceName    = "notification-service"
-	jaegerEndpoint = "http://localhost:14268/api/traces"
+	serviceName       = "notification-service"
+	notificationTopic = "notifications"
+	consumerGroupID   = "notification-group"
 )
 
 var (
-	tracer            = otel.Tracer(serviceName)
-	kafkaBrokers      = []string{"localhost:9092"}
-	notificationTopic = "notifications"
-	consumerGroupID   = "notification-group"
+	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+	// 读取逗号分隔的 broker 列表
+	kafkaBrokers = strings.Split(getEnv("KAFKA_BROKERS", "localhost:9092"), ",")
+
+	tracer = otel.Tracer(serviceName)
 )
 
 // <<<<<<< 改造点: 更新事件结构 >>>>>>>>>

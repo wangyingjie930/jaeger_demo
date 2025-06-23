@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -15,9 +16,12 @@ import (
 )
 
 const (
-	serviceName         = "api-gateway"
-	jaegerEndpoint      = "http://localhost:14268/api/traces"
-	orderServiceBaseURL = "http://localhost:8081"
+	serviceName = "api-gateway"
+)
+
+var (
+	jaegerEndpoint      = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+	orderServiceBaseURL = getEnv("ORDER_SERVICE_BASE_URL", "http://localhost:8081")
 )
 
 // <<<<<<< 新增特性开关 >>>>>>>>>
@@ -94,4 +98,11 @@ func complexOrderHandler(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(resp.Body)
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }
