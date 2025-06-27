@@ -1,0 +1,49 @@
+# k8s/03-services/api-gateway.yaml
+
+# ----------------- API Gateway Deployment -----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: jaeger-demo
+  labels:
+    app: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          # 镜像地址来自 build-all.sh 脚本
+          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/api-gateway:latest
+          ports:
+            - containerPort: 8080 # 容器暴露的端口
+          envFrom: # 从外部源（这里是 ConfigMap）导入环境变量
+            - configMapRef:
+                # 引用名为 'app-config' 的 ConfigMap
+                # 这会将 ConfigMap 中所有的键值对作为环境变量注入到容器中
+                name: app-config
+---
+
+# ----------------- API Gateway Service -----------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: jaeger-demo
+spec:
+  selector:
+    app: api-gateway # 将流量转发到带有 'app: api-gateway' 标签的 Pod
+  ports:
+    - port: 8080 # Service 暴露的端口
+      targetPort: 8080 # 目标容器的端口
+  # type: ClusterIP 表示这个服务只在集群内部可见。
+  # 通常，API Gateway 会配合 Ingress 或 LoadBalancer 类型的 Service 来对集群外部暴露。
+  # 在这里，我们保持为 ClusterIP，假设外部流量将通过 Ingress Controller 接入。
+  type: ClusterIP

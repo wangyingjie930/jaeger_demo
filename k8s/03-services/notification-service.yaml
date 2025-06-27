@@ -1,0 +1,45 @@
+# k8s/03-services/notification-service.yaml
+
+# ----------------- Notification Service Deployment -----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: jaeger-demo
+  labels:
+    app: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          # 镜像地址来自 build-all.sh 脚本
+          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/notification-service:latest
+          ports:
+            - containerPort: 8083
+          envFrom: # 从 ConfigMap 'app-config' 注入环境变量
+            - configMapRef:
+                name: app-config
+---
+
+# ----------------- Notification Service Service -----------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: jaeger-demo
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 8083
+      targetPort: 8083
+  # ClusterIP 类型的服务，仅在集群内部可见
+  type: ClusterIP 

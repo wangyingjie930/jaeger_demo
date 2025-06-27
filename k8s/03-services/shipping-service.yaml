@@ -1,0 +1,45 @@
+# k8s/03-services/shipping-service.yaml
+
+# ----------------- Shipping Service Deployment -----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping-service
+  namespace: jaeger-demo
+  labels:
+    app: shipping-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-service
+  template:
+    metadata:
+      labels:
+        app: shipping-service
+    spec:
+      containers:
+        - name: shipping-service
+          # 镜像地址来自 build-all.sh 脚本
+          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/shipping-service:latest
+          ports:
+            - containerPort: 8086
+          envFrom: # 从 ConfigMap 'app-config' 注入环境变量
+            - configMapRef:
+                name: app-config
+---
+
+# ----------------- Shipping Service Service -----------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-service
+  namespace: jaeger-demo
+spec:
+  selector:
+    app: shipping-service
+  ports:
+    - port: 8086
+      targetPort: 8086
+  # ClusterIP 类型的服务，仅在集群内部可见
+  type: ClusterIP 

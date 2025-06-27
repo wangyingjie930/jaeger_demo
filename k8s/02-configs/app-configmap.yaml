@@ -1,0 +1,30 @@
+# k8s/02-configs/app-configmap.yaml
+# ConfigMap 用于存储非机密的配置数据，例如环境变量、配置文件等。
+# 将配置与应用镜像分离，使得应用更具可移植性，配置更易于管理。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: jaeger-demo
+data:
+  # JAEGER_ENDPOINT: Jaeger trace 收集器的地址。
+  # "jaeger" 是 Jaeger Service 的名称。
+  # "jaeger-demo" 是命名空间。
+  # 在同一个命名空间下的服务可以直接使用服务名 "jaeger:14268" 进行通信。
+  # 写成 "jaeger.jaeger-demo:14268" 是更明确的 FQDN (完全限定域名) 格式。
+  JAEGER_ENDPOINT: "http://jaeger.jaeger-demo:14268/api/traces"
+
+  # KAFKA_BROKERS: Kafka 集群的地址。
+  # "kafka-service" 是我们在 kafka-zookeeper.yaml 中定义的 Kafka Service 的名称。
+  KAFKA_BROKERS: "kafka-service.jaeger-demo:9092"
+
+  # 以下是各个微服务的访问地址。
+  # 在 Kubernetes 集群内部，服务之间可以通过 "http://<service-name>:<port>" 的格式直接通信。
+  # 例如，api-gateway 可以通过 "http://order-service:8081" 访问 order-service。
+  ORDER_SERVICE_BASE_URL: "http://order-service:8081"
+  FRAUD_DETECTION_SERVICE_URL: "http://fraud-detection-service:8085/check"
+  INVENTORY_SERVICE_URL: "http://inventory-service:8082"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8083"
+  PRICING_SERVICE_URL: "http://pricing-service:8084"
+  PROMOTION_SERVICE_URL: "http://promotion-service:8087"
+  SHIPPING_SERVICE_URL: "http://shipping-service:8086"

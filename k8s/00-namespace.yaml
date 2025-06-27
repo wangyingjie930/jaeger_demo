@@ -1,0 +1,10 @@
+# k8s/00-namespace.yaml
+# 定义一个 Kubernetes 命名空间（Namespace）
+# 命名空间用于将集群中的资源划分为逻辑上隔离的组。
+# 这有助于在多租户、多项目或多环境场景下管理资源，避免命名冲突。
+apiVersion: v1
+kind: Namespace
+metadata:
+  # 为我们的演示应用定义一个名为 'jaeger-demo' 的命名空间
+  # 之后所有的资源都应该部署在这个命名空间下
+  name: jaeger-demo

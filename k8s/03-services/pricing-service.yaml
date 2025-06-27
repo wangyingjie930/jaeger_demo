@@ -1,0 +1,45 @@
+# k8s/03-services/pricing-service.yaml
+
+# ----------------- Pricing Service Deployment -----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pricing-service
+  namespace: jaeger-demo
+  labels:
+    app: pricing-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pricing-service
+  template:
+    metadata:
+      labels:
+        app: pricing-service
+    spec:
+      containers:
+        - name: pricing-service
+          # 镜像地址来自 build-all.sh 脚本
+          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/pricing-service:latest
+          ports:
+            - containerPort: 8084
+          envFrom: # 从 ConfigMap 'app-config' 注入环境变量
+            - configMapRef:
+                name: app-config
+---
+
+# ----------------- Pricing Service Service -----------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: pricing-service
+  namespace: jaeger-demo
+spec:
+  selector:
+    app: pricing-service
+  ports:
+    - port: 8084
+      targetPort: 8084
+  # ClusterIP 类型的服务，仅在集群内部可见
+  type: ClusterIP 

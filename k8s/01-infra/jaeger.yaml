@@ -1,0 +1,58 @@
+# k8s/01-infra/jaeger.yaml
+
+# ----------------- Jaeger Deployment -----------------
+# Deployment 用于定义和管理应用的无状态实例（Pods）。
+# 它确保指定数量的副本（replicas）正在运行，并能在节点故障或 Pod 终止时自动替换它们。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: jaeger-demo # 确保部署在正确的命名空间
+  labels:
+    app: jaeger # 标签，用于 Service 识别和管理
+spec:
+  replicas: 1 # 运行一个 Jaeger 实例
+  selector:
+    matchLabels:
+      app: jaeger # 这个 selector 告诉 Deployment 要管理哪些 Pods（带有 app:jaeger 标签的）
+  template: # Pod 模板，定义了要运行的容器的规格
+    metadata:
+      labels:
+        app: jaeger # 为 Pods 添加标签，以便被 selector 选中
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.57 # 使用 Jaeger 的一体化镜像，包含了所有组件，适合开发和演示
+          ports:
+            - containerPort: 16686 # Jaeger UI 的端口
+              name: ui
+            - containerPort: 14268 # OTLP/HTTP 收集器端口，用于接收 trace 数据
+              name: collector
+          env:
+            # 环境变量，用于配置 Jaeger
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true" # 启用 OTLP 收集器，这是 OpenTelemetry 的标准协议
+
+---
+
+# ----------------- Jaeger Service -----------------
+# Service 用于为一组 Pods 提供一个稳定的网络入口点。
+# 即使 Pods 的 IP 地址发生变化，Service 的地址（ClusterIP 或 DNS 名）保持不变。
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: jaeger-demo
+spec:
+  selector:
+    app: jaeger # 这个 selector 告诉 Service 将流量转发到哪些 Pods（带有 app:jaeger 标签的）
+  ports:
+    - name: ui
+      port: 16686 # Service 暴露的端口
+      targetPort: 16686 # 流量要转发到的目标 Pod 的端口
+    - name: collector
+      port: 14268
+      targetPort: 14268
+  # type: ClusterIP 表示这个 Service 只在集群内部可见。
+  # 其他服务可以通过 'jaeger.jaeger-demo.svc.cluster.local' 或简写 'jaeger' (在同一命名空间下) 来访问它。
+  type: ClusterIP

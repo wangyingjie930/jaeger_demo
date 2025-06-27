@@ -1,0 +1,139 @@
+# k8s/01-infra/kafka-zookeeper.yaml
+
+# ----------------- Zookeeper -----------------
+
+# Headless Service for Zookeeper
+# Headless Service (clusterIP: None) 不会分配 ClusterIP，而是直接返回后端 Pods 的 IP 地址列表。
+# 这对于需要稳定网络标识的 StatefulSet 非常重要，让每个 Pod 都有一个唯一的、可预测的 DNS 名称（例如 zookeeper-0.zookeeper-headless...）。
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-headless
+  namespace: jaeger-demo
+  labels:
+    app: zookeeper
+spec:
+  ports:
+    - port: 2181
+      name: client
+  clusterIP: None # 设置为 None，使其成为 Headless Service
+  selector:
+    app: zookeeper
+
+---
+
+# StatefulSet for Zookeeper
+# StatefulSet 用于管理有状态应用，如数据库、消息队列等。
+# 它为每个 Pod 提供了稳定的、唯一的网络标识符和持久化存储。
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: jaeger-demo
+spec:
+  serviceName: "zookeeper-headless" # 必须与上面的 Headless Service 名称匹配
+  replicas: 1 # 对于简单演示，1个副本足够。生产环境建议使用3或5个以实现高可用。
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.3.2
+          ports:
+            - containerPort: 2181
+              name: client
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          volumeMounts: # 将持久化存储挂载到容器内
+            - name: zookeeper-data
+              mountPath: /var/lib/zookeeper/data
+  volumeClaimTemplates: # 卷声明模板，为每个 Pod 自动创建独立的持久卷（PersistentVolume）
+    - metadata:
+        name: zookeeper-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ] # 卷可以被单个节点读写
+        resources:
+          requests:
+            storage: 5Gi # 为每个 Zookeeper 实例申请 5GB 的存储空间
+
+---
+# ----------------- Kafka -----------------
+
+# Service for Kafka
+# 这是一个普通的 ClusterIP Service，为 Kafka brokers 提供一个统一的访问入口。
+# 应用可以通过 'kafka-service.jaeger-demo:9092' 来连接到 Kafka 集群。
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: jaeger-demo
+spec:
+  type: ClusterIP
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+  selector:
+    app: kafka
+
+---
+
+# StatefulSet for Kafka
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: jaeger-demo
+spec:
+  serviceName: "kafka-service"
+  replicas: 1 # 简单演示设置为1。生产环境应增加副本数并相应调整配置。
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.3.2
+          ports:
+            - containerPort: 9092
+              name: kafka
+          env:
+            - name: KAFKA_BROKER_ID
+              # 每个 broker 在集群中必须有唯一的 ID。对于 StatefulSet，可以动态生成。
+              # 但对于单节点，硬编码为 "1" 即可。
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              # 连接到 Zookeeper 集群的地址。
+              # 使用了 Zookeeper 的 Headless Service DNS 名称，这是 Kubernetes 内部服务发现的标准方式。
+              value: "zookeeper-headless.jaeger-demo.svc.cluster.local:2181"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              # broker 向 Zookeeper 注册的、客户端应该用来连接它的地址。
+              # 这里我们使用 Kafka 的 ClusterIP Service 地址，确保集群内部的客户端可以正确连接。
+              value: "PLAINTEXT://kafka-service.jaeger-demo.svc.cluster.local:9092"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              # 内部 topic 的复制因子。在单节点集群中，必须为 "1"。
+              # 在生产环境中，应等于或小于 broker 的数量。
+              value: "1"
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+  volumeClaimTemplates: # 为每个 Kafka broker 自动创建持久化存储
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi # 为每个 Kafka 实例申请 10GB 的存储空间
