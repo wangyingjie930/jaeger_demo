@@ -28,9 +28,12 @@ SERVICES=(
 echo -e "${BLUE}🚀 开始为所有微服务构建Docker镜像...${NC}"
 echo "--------------------------------------------------"
 
+ACR_REGISTRY="crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang"
+
 # 循环遍历服务列表
 for service in "${SERVICES[@]}"; do
     IMAGE_TAG="jaeger-demo/${service}:latest"
+    ACR_IMAGE="${ACR_REGISTRY}/${service}:latest"
 
     echo -e "🔧 正在构建服务: ${BLUE}${service}${NC}，镜像标签为: ${GREEN}${IMAGE_TAG}${NC}"
 
@@ -42,6 +45,13 @@ for service in "${SERVICES[@]}"; do
         .
 
     echo -e "✅ 服务 ${BLUE}${service}${NC} 构建成功！"
+
+    echo "正在为 ${service} 标记镜像: ${ACR_IMAGE}"
+    docker tag "${IMAGE_TAG}" "${ACR_IMAGE}"
+
+    echo "正在推送镜像: ${ACR_IMAGE}"
+    docker push "${ACR_IMAGE}"
+
     echo "--------------------------------------------------"
 done
 
