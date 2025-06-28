@@ -21,7 +21,8 @@ spec:
       containers:
         - name: api-gateway
           # 镜像地址来自 build-all.sh 脚本
-          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/api-gateway:latest
+          image: jaeger-demo/api-gateway:latest
+          imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8080 # 容器暴露的端口
           envFrom: # 从外部源（这里是 ConfigMap）导入环境变量

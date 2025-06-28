@@ -46,12 +46,6 @@ for service in "${SERVICES[@]}"; do
 
     echo -e "✅ 服务 ${BLUE}${service}${NC} 构建成功！"
 
-    echo "正在为 ${service} 标记镜像: ${ACR_IMAGE}"
-    docker tag "${IMAGE_TAG}" "${ACR_IMAGE}"
-
-    echo "正在推送镜像: ${ACR_IMAGE}"
-    docker push "${ACR_IMAGE}"
-
     echo "--------------------------------------------------"
 done
 

@@ -21,7 +21,8 @@ spec:
       containers:
         - name: inventory-service
           # 镜像地址来自 build-all.sh 脚本
-          image: crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjiewang/inventory-service:latest
+          image: jaeger-demo/inventory-service:latest
+          imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8082
           envFrom: # 从 ConfigMap 'app-config' 注入环境变量
