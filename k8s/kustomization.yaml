@@ -26,6 +26,8 @@ resources:
   - 03-services/shipping-service.yaml
   - 03-services/promotion-service.yaml
 
+  - 04-monitoring/app-services-monitor.yaml
+
 # 通用标签
 commonLabels:
   app.kubernetes.io/name: jaeger-demo

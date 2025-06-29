@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: app-services-monitor      # 给这个通用的 Monitor 起个名字
+  namespace: monitoring            # 必须部署在 Prometheus 所在的命名空间
+  labels:
+    release: my-prometheus-stack # 必须和你 helm install 时的 release name 匹配
+spec:
+  namespaceSelector:
+    matchNames:
+      - jaeger-demo                # 指定只扫描 'jaeger-demo' 这个命名空间下的 Service
+  selector:
+    matchLabels:
+      monitor: "true"            # <-- 核心：匹配所有带 monitor: "true" 标签的 Service
+  endpoints:
+    - port: http-metrics           # <-- 这里的名字要和你 Service 中定义的 metrics 端口名匹配
+      path: /metrics               # 抓取的路径
+      interval: 15s                # 抓取间隔

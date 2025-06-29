@@ -38,11 +38,15 @@ kind: Service
 metadata:
   name: api-gateway
   namespace: jaeger-demo
+  labels:
+    app: api-gateway
+    monitor: "true"  # <-- 添加这个统一的标签
 spec:
   selector:
     app: api-gateway # 将流量转发到带有 'app: api-gateway' 标签的 Pod
   ports:
-    - port: 8080 # Service 暴露的端口
+    - name: http-metrics
+      port: 8080 # Service 暴露的端口
       targetPort: 8080 # 目标容器的端口
   # type: ClusterIP 表示这个服务只在集群内部可见。
   # 通常，API Gateway 会配合 Ingress 或 LoadBalancer 类型的 Service 来对集群外部暴露。
