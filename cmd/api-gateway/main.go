@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
@@ -38,6 +39,7 @@ func main() {
 	}
 	defer tp.Shutdown(context.Background())
 
+	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/create_complex_order", complexOrderHandler)
 	log.Println("API Gateway listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
