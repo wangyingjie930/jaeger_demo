@@ -48,11 +48,14 @@ func (c KafkaHeaderCarrier) Keys() []string {
 // NewKafkaWriter 创建一个新的 Kafka 生产者
 func NewKafkaWriter(brokers []string, topic string) *kafka.Writer {
 	return &kafka.Writer{
-		Addr:         kafka.TCP(brokers...),
-		Topic:        topic,
-		Balancer:     &kafka.LeastBytes{},
-		WriteTimeout: 10 * time.Second,
-		ReadTimeout:  10 * time.Second,
+		Addr:     kafka.TCP(brokers...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
+		// 关键改动：开启异步模式
+		Async: true,
+		// 可以配合异步模式调整批量参数，以提升吞吐量
+		BatchSize:    100,
+		BatchTimeout: 10 * time.Millisecond,
 	}
 }
 
