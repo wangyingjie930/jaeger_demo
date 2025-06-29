@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: jaeger-demo
+  namespace: jaeger-demo
+
+resources:
+  # 命名空间
+  - 00-namespace.yaml
+  
+  # 基础设施资源
+  - 01-infra/jaeger.yaml
+  - 01-infra/kafka-zookeeper.yaml
+  
+  # 配置资源
+  - 02-configs/app-configmap.yaml
+  
+  # 服务资源
+  - 03-services/api-gateway.yaml
+  - 03-services/order-service.yaml
+  - 03-services/inventory-service.yaml
+  - 03-services/notification-service.yaml
+  - 03-services/pricing-service.yaml
+  - 03-services/fraud-detection-service.yaml
+  - 03-services/shipping-service.yaml
+  - 03-services/promotion-service.yaml
+
+# 通用标签
+commonLabels:
+  app.kubernetes.io/name: jaeger-demo
+  app.kubernetes.io/part-of: jaeger-demo
+  app.kubernetes.io/version: v1.0.0
+
+# 通用注解
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0" 
