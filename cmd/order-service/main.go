@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"jaeger-demo/internal/mq"
 	"jaeger-demo/internal/tracing"
 	"log"
@@ -62,6 +63,11 @@ func main() {
 	defer kafkaWriter.Close()
 
 	http.HandleFunc("/create_complex_order", handleCreateComplexOrder)
+
+	http.HandleFunc("/healthz", healthzHandler)
+
+	http.Handle("/metrics", promhttp.Handler())
+
 	log.Println("Order Service listening on :8081")
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
@@ -310,4 +316,10 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func healthzHandler(w http.ResponseWriter, r *http.Request) {
+	// 对于 livenessProbe，只要能响应，就说明进程存活
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }

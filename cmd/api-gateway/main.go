@@ -40,6 +40,12 @@ func main() {
 	defer tp.Shutdown(context.Background())
 
 	http.Handle("/metrics", promhttp.Handler())
+
+	// <<<<<<< 新增: 注册健康检查路由 >>>>>>>>>
+	http.HandleFunc("/healthz", healthzHandler)
+	http.HandleFunc("/readyz", readyzHandler)
+	// <<<<<<< 新增结束 >>>>>>>>>
+
 	http.HandleFunc("/create_complex_order", complexOrderHandler)
 	log.Println("API Gateway listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -108,3 +114,25 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
+
+// <<<<<<< 新增: 健康检查 Handler >>>>>>>>>
+func healthzHandler(w http.ResponseWriter, r *http.Request) {
+	// 对于 livenessProbe，只要能响应，就说明进程存活
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func readyzHandler(w http.ResponseWriter, r *http.Request) {
+	// 对于 readinessProbe，可以加入对下游服务的检查
+	// 这里我们用一个简化的例子：检查 order-service 是否可达
+	// 在真实应用中，你可能需要检查所有关键依赖
+	resp, err := http.Get(orderServiceBaseURL + "/healthz") // 假设 order-service 也实现了 /healthz
+	if err != nil || resp.StatusCode != http.StatusOK {
+		http.Error(w, "Downstream order-service not ready", http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+// <<<<<<< 新增结束 >>>>>>>>>
