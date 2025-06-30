@@ -1,0 +1,8 @@
+# k8s/00-database-namespace.yaml
+# 定义一个 Kubernetes 命名空间（Namespace）
+# 用于存放数据库服务，如 MySQL 和 Redis
+apiVersion: v1
+kind: Namespace
+metadata:
+  # 为数据库服务定义一个名为 'database' 的命名空间
+  name: database

@@ -1,0 +1,79 @@
+# k8s/01-infra/mysql.yaml
+# 定义一个 Secret 用于存储 MySQL 的 root 密码
+# 将密码存储在 Secret 中比直接写在配置里更安全
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+  namespace: database
+type: Opaque
+data:
+  # 密码是 'root' (base64 编码)
+  MYSQL_ROOT_PASSWORD: cm9vdA==
+
+---
+# 定义一个 PersistentVolumeClaim (PVC) 用于 MySQL 数据持久化
+# PVC 会向集群申请存储空间，确保 Pod 重启后数据不丢失
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# 定义 MySQL 的 Deployment
+# Deployment 负责创建和管理 MySQL 的 Pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_ROOT_PASSWORD
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+
+---
+# 定义 MySQL 的 Service
+# Service 为 MySQL Pod 提供一个稳定的网络入口
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: database
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+  type: ClusterIP

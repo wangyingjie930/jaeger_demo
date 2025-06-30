@@ -30,3 +30,15 @@ data:
   PRICING_SERVICE_URL: "http://pricing-service:8084/calculate_price"
   PROMOTION_SERVICE_URL: "http://promotion-service:8087/get_promo_price"
   SHIPPING_SERVICE_URL: "http://shipping-service:8086/get_quote"
+
+  # DB_SOURCE: 数据库连接字符串。
+  # root:root@tcp(mysql.database:3306)/test
+  # mysql.database:3306 是数据库服务的地址。
+  # "mysql" 是 Service 的名称。
+  # "database" 是命名空间。
+  DB_SOURCE: "root:root@tcp(mysql.database:3306)/test"
+
+  # REDIS_ADDR: Redis 的地址。
+  # "redis" 是 Service 的名称。
+  # "database" 是命名空间。
+  REDIS_ADDR: "redis.database:6379"
