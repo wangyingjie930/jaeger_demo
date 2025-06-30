@@ -5,4 +5,4 @@ apiVersion: v1
 kind: Namespace
 metadata:
   # 为数据库服务定义一个名为 'database' 的命名空间
-  name: database
+  name: infra

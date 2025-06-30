@@ -12,11 +12,11 @@ data:
   # "jaeger-demo" 是命名空间。
   # 在同一个命名空间下的服务可以直接使用服务名 "jaeger:14268" 进行通信。
   # 写成 "jaeger.jaeger-demo:14268" 是更明确的 FQDN (完全限定域名) 格式。
-  JAEGER_ENDPOINT: "http://jaeger.jaeger-demo:14268/api/traces"
+  JAEGER_ENDPOINT: "http://jaeger.infra:14268/api/traces"
 
   # KAFKA_BROKERS: Kafka 集群的地址。
   # "kafka-service" 是我们在 kafka-zookeeper.yaml 中定义的 Kafka Service 的名称。
-  KAFKA_BROKERS: "kafka-service.jaeger-demo:9092"
+  KAFKA_BROKERS: "kafka-service.infra:9092"
 
   # 以下是各个微服务的访问地址。
   # 在 Kubernetes 集群内部，服务之间可以通过 "http://<service-name>:<port>" 的格式直接通信。
@@ -36,9 +36,10 @@ data:
   # mysql.database:3306 是数据库服务的地址。
   # "mysql" 是 Service 的名称。
   # "database" 是命名空间。
-  DB_SOURCE: "root:root@tcp(mysql.database:3306)/test"
+  DB_SOURCE: "root:root@tcp(mysql.infra:3306)/test"
 
   # REDIS_ADDR: Redis 的地址。
   # "redis" 是 Service 的名称。
   # "database" 是命名空间。
-  REDIS_ADDR: "redis.database:6379"
+  REDIS_ADDR: "redis.infra:6379"
+  ZK_SERVERS: "zookeeper-headless.infra:2181"

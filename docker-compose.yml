@@ -21,6 +21,7 @@ x-go-service-base: &go-service-base
   environment:
     JAEGER_ENDPOINT: http://jaeger:14268/api/traces
     KAFKA_BROKERS: kafka:29092
+    ZK_SERVERS: zookeeper:2181
 
 # ------------------ 服务定义 ------------------
 services:

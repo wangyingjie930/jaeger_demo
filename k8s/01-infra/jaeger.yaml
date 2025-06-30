@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaeger
-  namespace: jaeger-demo # 确保部署在正确的命名空间
+  namespace: infra # 确保部署在正确的命名空间
   labels:
     app: jaeger # 标签，用于 Service 识别和管理
 spec:
@@ -42,7 +42,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaeger
-  namespace: jaeger-demo
+  namespace: infra
 spec:
   selector:
     app: jaeger # 这个 selector 告诉 Service 将流量转发到哪些 Pods（带有 app:jaeger 标签的）

@@ -4,7 +4,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
-  namespace: database
+  namespace: infra
 spec:
   accessModes:
     - ReadWriteOnce
@@ -18,7 +18,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: database
+  namespace: infra
 spec:
   replicas: 1
   selector:
@@ -48,7 +48,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis
-  namespace: database
+  namespace: infra
 spec:
   ports:
   - port: 6379
