@@ -24,26 +24,15 @@ type DistributedLock struct {
 
 // NewDistributedLock 创建一个新的分布式锁实例
 func NewDistributedLock(conn *Conn, resourceID string) *DistributedLock {
-	// 确保根节点存在
-	// 在生产环境中，这个操作通常由初始化脚本完成
-	if _, _, err := conn.Exists(lockRoot); err != nil {
-		_, createErr := conn.Create(lockRoot, []byte(""), 0, zk.WorldACL(zk.PermAll))
-		if createErr != nil && createErr != zk.ErrNodeExists {
-			// 如果创建失败且不是因为节点已存在，则是一个严重问题
-			panic(fmt.Sprintf("Failed to create lock root node: %v", createErr))
-		}
-	}
-
 	lockPath := lockRoot + "/" + resourceID
 
-	// 确保锁的父节点路径存在
-	if _, _, err := conn.Exists(lockPath); err != nil {
-		_, createErr := conn.Create(lockPath, []byte(""), 0, zk.WorldACL(zk.PermAll))
-		if createErr != nil && createErr != zk.ErrNodeExists {
-			// 如果创建失败且不是因为节点已存在，则是一个严重问题
-			panic(fmt.Sprintf("Failed to create lock path node %s: %v", lockPath, createErr))
-		}
+	// <<<<<<< 修改点: 使用 ensurePath 替换原有的创建逻辑 >>>>>>>>>
+	// 确保锁的根路径和资源路径都存在
+	if err := ensurePath(conn, lockPath); err != nil {
+		// 如果路径创建失败，这是一个严重问题，直接panic
+		panic(fmt.Sprintf("Failed to ensure lock path %s exists: %v", lockPath, err))
 	}
+	// <<<<<<< 修改结束 >>>>>>>>>
 
 	return &DistributedLock{
 		conn: conn,
@@ -122,5 +111,29 @@ func (l *DistributedLock) Unlock() error {
 		return fmt.Errorf("failed to delete lock node: %w", err)
 	}
 	l.lockNode = ""
+	return nil
+}
+
+// 新增一个辅助函数，确保路径存在 (类似 mkdir -p)
+func ensurePath(conn *Conn, path string) error {
+	parts := strings.Split(path, "/")
+	currentPath := ""
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		currentPath += "/" + part
+		exists, _, err := conn.Exists(currentPath)
+		if err != nil {
+			return fmt.Errorf("failed to check existence of path %s: %w", currentPath, err)
+		}
+		if !exists {
+			_, err := conn.Create(currentPath, []byte{}, 0, zk.WorldACL(zk.PermAll))
+			// 如果节点因为并发创建而已经存在，忽略这个错误
+			if err != nil && err != zk.ErrNodeExists {
+				return fmt.Errorf("failed to create path %s: %w", currentPath, err)
+			}
+		}
+	}
 	return nil
 }
