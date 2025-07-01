@@ -1,87 +1,87 @@
-# k8s/03-services/api-gateway.yaml
-
-# ----------------- API Gateway Deployment -----------------
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-  namespace: jaeger-demo
-  labels:
-    app: api-gateway
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: api-gateway
-  template:
-    metadata:
-      labels:
-        app: api-gateway
-    spec:
-      containers:
-        - name: api-gateway
-          # 镜像地址来自 build-all.sh 脚本
-          image: jaeger-demo/api-gateway:latest
-          imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
-          ports:
-            - containerPort: 8080 # 容器暴露的端口
-          envFrom: # 从外部源（这里是 ConfigMap）导入环境变量
-            - configMapRef:
-                # 引用名为 'app-config' 的 ConfigMap
-                # 这会将 ConfigMap 中所有的键值对作为环境变量注入到容器中
-                name: app-config
-
-          # <<<<<<< 新增: 健康检查和资源声明 >>>>>>>>>
-          # 存活探针: 如果失败，Kubernetes会重启这个Pod
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8080
-            initialDelaySeconds: 15 # Pod启动后15秒开始第一次探测
-            periodSeconds: 20       # 每20秒探测一次
-            timeoutSeconds: 5       # 探测超时时间
-            failureThreshold: 3     # 连续3次失败后，标记为不健康
-
-          # 就绪探针: 如果失败，Kubernetes会把这个Pod从Service的后端Endpoint中移除，不再转发流量给它
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8080
-            initialDelaySeconds: 5  # Pod启动后5秒开始第一次探测
-            periodSeconds: 10       # 每10秒探测一次
-            timeoutSeconds: 5
-            failureThreshold: 3
-
-          # 资源声明: 帮助Kubernetes进行资源调度和管理
-          resources:
-            # requests: 调度时必须满足的最小资源，Pod调度到哪个Node上，Node必须有这么多空闲资源
-            requests:
-              cpu: "100m"     # 100 millicores (0.1 CPU core)
-              memory: "128Mi" # 128 Mebibytes
-            # limits: 容器可以使用的资源上限，防止单个容器耗尽节点资源
-            limits:
-              cpu: "500m"     # 500 millicores (0.5 CPU core)
-              memory: "256Mi" # 256 Mebibytes
-          # <<<<<<< 新增结束 >>>>>>>>>
----
-
-# ----------------- API Gateway Service -----------------
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-gateway
-  namespace: jaeger-demo
-  labels:
-    app: api-gateway
-    monitor: "true"  # <-- 添加这个统一的标签
-spec:
-  selector:
-    app: api-gateway # 将流量转发到带有 'app: api-gateway' 标签的 Pod
-  ports:
-    - name: http-metrics
-      port: 8080 # Service 暴露的端口
-      targetPort: 8080 # 目标容器的端口
-  # type: ClusterIP 表示这个服务只在集群内部可见。
-  # 通常，API Gateway 会配合 Ingress 或 LoadBalancer 类型的 Service 来对集群外部暴露。
-  # 在这里，我们保持为 ClusterIP，假设外部流量将通过 Ingress Controller 接入。
-  type: ClusterIP
+## k8s/03-services/api-gateway.yaml
+#
+## ----------------- API Gateway Deployment -----------------
+#apiVersion: apps/v1
+#kind: Deployment
+#metadata:
+#  name: api-gateway
+#  namespace: jaeger-demo
+#  labels:
+#    app: api-gateway
+#spec:
+#  replicas: 1
+#  selector:
+#    matchLabels:
+#      app: api-gateway
+#  template:
+#    metadata:
+#      labels:
+#        app: api-gateway
+#    spec:
+#      containers:
+#        - name: api-gateway
+#          # 镜像地址来自 build-all.sh 脚本
+#          image: jaeger-demo/api-gateway:latest
+#          imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
+#          ports:
+#            - containerPort: 8080 # 容器暴露的端口
+#          envFrom: # 从外部源（这里是 ConfigMap）导入环境变量
+#            - configMapRef:
+#                # 引用名为 'app-config' 的 ConfigMap
+#                # 这会将 ConfigMap 中所有的键值对作为环境变量注入到容器中
+#                name: app-config
+#
+#          # <<<<<<< 新增: 健康检查和资源声明 >>>>>>>>>
+#          # 存活探针: 如果失败，Kubernetes会重启这个Pod
+#          livenessProbe:
+#            httpGet:
+#              path: /healthz
+#              port: 8080
+#            initialDelaySeconds: 15 # Pod启动后15秒开始第一次探测
+#            periodSeconds: 20       # 每20秒探测一次
+#            timeoutSeconds: 5       # 探测超时时间
+#            failureThreshold: 3     # 连续3次失败后，标记为不健康
+#
+#          # 就绪探针: 如果失败，Kubernetes会把这个Pod从Service的后端Endpoint中移除，不再转发流量给它
+#          readinessProbe:
+#            httpGet:
+#              path: /readyz
+#              port: 8080
+#            initialDelaySeconds: 5  # Pod启动后5秒开始第一次探测
+#            periodSeconds: 10       # 每10秒探测一次
+#            timeoutSeconds: 5
+#            failureThreshold: 3
+#
+#          # 资源声明: 帮助Kubernetes进行资源调度和管理
+#          resources:
+#            # requests: 调度时必须满足的最小资源，Pod调度到哪个Node上，Node必须有这么多空闲资源
+#            requests:
+#              cpu: "100m"     # 100 millicores (0.1 CPU core)
+#              memory: "128Mi" # 128 Mebibytes
+#            # limits: 容器可以使用的资源上限，防止单个容器耗尽节点资源
+#            limits:
+#              cpu: "500m"     # 500 millicores (0.5 CPU core)
+#              memory: "256Mi" # 256 Mebibytes
+#          # <<<<<<< 新增结束 >>>>>>>>>
+#---
+#
+## ----------------- API Gateway Service -----------------
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: api-gateway
+#  namespace: jaeger-demo
+#  labels:
+#    app: api-gateway
+#    monitor: "true"  # <-- 添加这个统一的标签
+#spec:
+#  selector:
+#    app: api-gateway # 将流量转发到带有 'app: api-gateway' 标签的 Pod
+#  ports:
+#    - name: http-metrics
+#      port: 8080 # Service 暴露的端口
+#      targetPort: 8080 # 目标容器的端口
+#  # type: ClusterIP 表示这个服务只在集群内部可见。
+#  # 通常，API Gateway 会配合 Ingress 或 LoadBalancer 类型的 Service 来对集群外部暴露。
+#  # 在这里，我们保持为 ClusterIP，假设外部流量将通过 Ingress Controller 接入。
+#  type: ClusterIP
