@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"jaeger-demo/internal/tracing"
+	"jaeger-demo/internal/pkg/tracing"
 	"log"
 	"net/http"
 	"os"

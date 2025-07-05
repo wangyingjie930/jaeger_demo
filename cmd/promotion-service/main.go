@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"jaeger-demo/internal/tracing"
+	"jaeger-demo/internal/pkg/tracing"
 	"log"
 	"net/http"
 	"os"
@@ -48,7 +48,7 @@ func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {
 	ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
 	// 从Baggage中提取业务上下文
-	promoID := baggage.FromContext(ctx).Member("promotion_id").Value()
+	promoId := baggage.FromContext(ctx).Member("promotion_id").Value()
 
 	ctx, span := tracer.Start(ctx, "promotion-service.GetPromoPrice")
 	defer span.End()
@@ -56,15 +56,15 @@ func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {
 	// 将业务信息记录到Span的Attribute中，便于排查
 	span.SetAttributes(
 		attribute.String("user.is_vip", r.URL.Query().Get("is_vip")),
-		attribute.String("promotion.id", promoID),
+		attribute.String("promotion.id", promoId),
 	)
 
-	log.Printf("Calculating promo price for promotion '%s'", promoID)
+	log.Printf("Calculating promo price for promotion '%s'", promoId)
 
 	// 模拟促销价格计算的耗时
 	time.Sleep(120 * time.Millisecond)
 
-	if promoID == "" {
+	if promoId == "" {
 		err := fmt.Errorf("promotion_id is missing from baggage")
 		span.RecordError(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -73,5 +73,5 @@ func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {
 
 	span.AddEvent("Promotion price calculated successfully")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"price": 79.99, "promo": "` + promoID + `"}`))
+	w.Write([]byte(`{"price": 79.99, "promo": "` + promoId + `"}`))
 }

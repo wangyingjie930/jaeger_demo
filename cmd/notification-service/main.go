@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"jaeger-demo/internal/mq"
-	"jaeger-demo/internal/tracing"
+	"fmt"
+	"jaeger-demo/internal/pkg/mq"
+	"jaeger-demo/internal/pkg/tracing"
 	"log"
 	"os"
 	"strings"
@@ -44,7 +45,7 @@ var (
 
 // <<<<<<< 改造点: 更新事件结构 >>>>>>>>>
 type NotificationEvent struct {
-	UserID      string `json:"userID"`
+	UserID      string `json:"userId"`
 	Message     string `json:"message"`
 	PromotionID string `json:"promotion_id,omitempty"`
 }
@@ -72,6 +73,7 @@ func main() {
 }
 
 func processNotification(msg kafka.Message) {
+	fmt.Println("hi.....")
 	ctx := mq.ExtractTraceContext(context.Background(), msg.Headers)
 
 	spanOpts := []trace.SpanStartOption{

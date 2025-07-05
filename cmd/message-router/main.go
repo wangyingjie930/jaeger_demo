@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"jaeger-demo/internal/pkg/mq"
+	"jaeger-demo/internal/pkg/session"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/segmentio/kafka-go"
-	"jaeger-demo/internal/mq"
-	"jaeger-demo/internal/session"
 )
 
 const (

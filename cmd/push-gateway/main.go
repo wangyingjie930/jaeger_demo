@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"jaeger-demo/internal/session"
+	"jaeger-demo/internal/pkg/session"
 	"log"
 	"net/http"
 	"os"
@@ -77,7 +77,7 @@ func (c *Client) readPump() {
 
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	// 1. 从URL参数获取UserID
-	userID := r.URL.Query().Get("userID")
+	userID := r.URL.Query().Get("userId")
 	if userID == "" {
 		http.Error(w, "userID is required", http.StatusBadRequest)
 		return

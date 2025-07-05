@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"io"
-	"jaeger-demo/internal/tracing"
+	"jaeger-demo/internal/pkg/tracing"
 	"log"
 	"net/http"
 	"net/url"

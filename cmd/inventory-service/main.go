@@ -4,8 +4,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"jaeger-demo/internal/tracing"
-	"jaeger-demo/internal/zookeeper" // <<<< 1. 引入zookeeper包
+	"jaeger-demo/internal/pkg/tracing"
+	"jaeger-demo/internal/pkg/zookeeper"
 	"log"
 	"net/http"
 	"os"
@@ -75,37 +75,37 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "inventory-service.ReserveStock")
 	defer span.End()
 
-	itemID := r.URL.Query().Get("itemID")
+	itemId := r.URL.Query().Get("itemId")
 	quantityStr := r.URL.Query().Get("quantity")
 	quantity, _ := strconv.Atoi(quantityStr)
-	orderID := r.URL.Query().Get("orderID")
+	orderID := r.URL.Query().Get("orderId")
 
 	span.SetAttributes(
-		attribute.String("item.id", itemID),
+		attribute.String("item.id", itemId),
 		attribute.Int("item.quantity", quantity),
 		attribute.String("order.id", orderID),
 	)
 
 	// <<<< 5. 在核心业务逻辑外层，加上分布式锁
-	// 使用 itemID 作为锁的资源标识
-	lock := zookeeper.NewDistributedLock(zkConn, itemID)
-	log.Printf("Attempting to acquire lock for item %s, order %s", itemID, orderID)
+	// 使用 itemId 作为锁的资源标识
+	lock := zookeeper.NewDistributedLock(zkConn, itemId)
+	log.Printf("Attempting to acquire lock for item %s, order %s", itemId, orderID)
 	span.AddEvent("Acquiring distributed lock")
 
 	if err := lock.Lock(); err != nil {
-		log.Printf("ERROR: Failed to acquire lock for item %s: %v", itemID, err)
+		log.Printf("ERROR: Failed to acquire lock for item %s: %v", itemId, err)
 		http.Error(w, "Failed to acquire lock, please try again later", http.StatusServiceUnavailable)
 		return
 	}
-	log.Printf("Successfully acquired lock for item %s, order %s", itemID, orderID)
+	log.Printf("Successfully acquired lock for item %s, order %s", itemId, orderID)
 	span.AddEvent("Acquired distributed lock")
 
 	// 确保锁一定会被释放
 	defer func() {
-		log.Printf("Releasing lock for item %s, order %s", itemID, orderID)
+		log.Printf("Releasing lock for item %s, order %s", itemId, orderID)
 		if err := lock.Unlock(); err != nil {
 			// 在真实生产环境中，释放锁失败需要记录严重错误日志，并可能需要人工介入
-			log.Printf("CRITICAL: Failed to release lock for item %s: %v", itemID, err)
+			log.Printf("CRITICAL: Failed to release lock for item %s: %v", itemId, err)
 		} else {
 			span.AddEvent("Released distributed lock")
 		}
@@ -113,11 +113,11 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 
 	// ------------------ START: 原有的核心业务逻辑 ------------------
 	// 故障注入点
-	if itemID == "item-faulty-123" && quantity > 10 {
-		log.Printf("Injecting fault for item %s", itemID)
+	if itemId == "item-faulty-123" && quantity > 10 {
+		log.Printf("Injecting fault for item %s", itemId)
 		time.Sleep(500 * time.Millisecond)
 
-		err := fmt.Errorf("inventory reserve failed for faulty item %s", itemID)
+		err := fmt.Errorf("inventory reserve failed for faulty item %s", itemId)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 
@@ -129,7 +129,7 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Simulating stock check and deduction in database...")
 	time.Sleep(100 * time.Millisecond)
 
-	log.Printf("Stock reservation successful for item %s, order %s", itemID, orderID)
+	log.Printf("Stock reservation successful for item %s, order %s", itemId, orderID)
 	span.AddEvent("Stock reserved")
 	// ------------------ END: 核心业务逻辑 ------------------
 
@@ -144,16 +144,16 @@ func releaseStockHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "inventory-service.ReleaseStock (Compensation)")
 	defer span.End()
 
-	itemID := r.URL.Query().Get("itemID")
-	orderID := r.URL.Query().Get("orderID")
+	itemId := r.URL.Query().Get("itemId")
+	orderID := r.URL.Query().Get("orderId")
 
 	span.SetAttributes(
-		attribute.String("item.id", itemID),
+		attribute.String("item.id", itemId),
 		attribute.String("order.id", orderID),
 		attribute.Bool("compensation.logic", true),
 	)
 
-	log.Printf("Stock release successful for item %s, order %s", itemID, orderID)
+	log.Printf("Stock release successful for item %s, order %s", itemId, orderID)
 	span.AddEvent("Stock released")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Stock released"))
@@ -166,8 +166,8 @@ func checkStockHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(ctx, "inventory-service.CheckStock")
 	defer span.End()
 
-	itemID := r.URL.Query().Get("itemID")
-	log.Printf("Stock check successful for item %s", itemID)
+	itemId := r.URL.Query().Get("itemId")
+	log.Printf("Stock check successful for item %s", itemId)
 	span.AddEvent("Stock check successful")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Stock available"))
@@ -176,7 +176,7 @@ func checkStockHandler(w http.ResponseWriter, r *http.Request) {
 /**
 Lock() (获取锁)
 
-  想象一下，现在有三个服务（A, B, C）同时来预占同一个商品（比如 itemID=123）的库存，它们都会调用 Lock()。
+  想象一下，现在有三个服务（A, B, C）同时来预占同一个商品（比如 itemId=123）的库存，它们都会调用 Lock()。
 
 
    1. 创建自己的节点：
