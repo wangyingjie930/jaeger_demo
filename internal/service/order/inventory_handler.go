@@ -19,7 +19,6 @@ var (
 
 func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "handler.InventoryReserveHandler")
-	orderCtx.Ctx = ctx
 	defer span.End()
 
 	fmt.Println("【责任链】=> 步骤2: 预占库存...")

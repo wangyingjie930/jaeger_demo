@@ -15,11 +15,10 @@ var (
 
 func (h *FraudCheckHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "handler.FraudCheck")
-	orderCtx.Ctx = ctx
 	defer span.End()
 
 	fmt.Println("【责任链】=> 步骤1: 欺诈检测...")
-	if err := orderCtx.HTTPClient.Post(orderCtx.Ctx, fraudDetectionServiceURL, orderCtx.Params); err != nil {
+	if err := orderCtx.HTTPClient.Post(ctx, fraudDetectionServiceURL, orderCtx.Params); err != nil {
 		span.RecordError(err)
 		http.Error(orderCtx.Writer, "Fraud check failed", http.StatusBadRequest)
 		return err // 中断链

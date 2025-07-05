@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"jaeger-demo/internal/pkg/httpclient"
 	"jaeger-demo/internal/pkg/mq"
@@ -18,11 +19,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
 	serviceName       = "order-service"
 	notificationTopic = "notifications"
+	requestTimeout    = 3 * time.Second
 )
 
 // 从环境变量或配置中读取所有下游服务的URL
@@ -85,9 +88,17 @@ func handleCreateOrder(
 	kafkaWriter *kafka.Writer,
 	chain handler.Handler,
 ) {
-	// 1. 提取 Trace 和 Baggage 上下文
+	// ✨ [核心改造点]
+	// 1. 从原始请求中提取 Trace 和 Baggage 上下文
 	propagator := otel.GetTextMapPropagator()
-	ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	// 使用原始请求的上下文作为父上下文
+	parentCtx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+
+	// 2. 创建一个带有超时的子上下文
+	// 整个订单处理流程（从进入责任链到结束）必须在 requestTimeout 内完成
+	ctx, cancel := context.WithTimeout(parentCtx, requestTimeout)
+	defer cancel() // 确保在函数退出时释放资源，无论成功还是失败
+
 	ctx, span := httpClient.Tracer.Start(ctx, "order-service.http_request")
 	defer span.End()
 
@@ -118,9 +129,19 @@ func handleCreateOrder(
 
 	// 3. 启动责任链
 	if err := chain.Handle(orderContext); err != nil {
-		// 错误已经在链中被处理（例如返回HTTP Error），这里只需记录日志即可
+		// 对于其他错误，记录日志即可，因为具体的HTTP响应已在链中处理
 		log.Printf("ERROR: Order processing chain failed for order %s: %v", orderContext.OrderId, err)
-		span.RecordError(err)
+
+		// ✨ [错误处理]
+		// 检查错误是否是由于上下文超时引起的
+		if ctx.Err() == context.DeadlineExceeded {
+			// 如果是超时，记录特定的日志并返回一个更友好的错误给客户端
+			span.SetStatus(codes.Error, "Request timed out")
+			span.RecordError(err)
+			http.Error(w, "Request timed out", http.StatusGatewayTimeout) // 504 Gateway Timeout 是一个合适的HTTP状态码
+		} else {
+			span.RecordError(err)
+		}
 	} else {
 		log.Printf("INFO: Order processing chain completed successfully for order %s", orderContext.OrderId)
 	}

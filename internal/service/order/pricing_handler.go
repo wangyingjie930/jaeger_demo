@@ -22,7 +22,6 @@ var (
 
 func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "handler.PriceHandler")
-	orderCtx.Ctx = ctx
 	defer span.End()
 
 	fmt.Println("【责任链】=> 步骤3: 动态定价...")

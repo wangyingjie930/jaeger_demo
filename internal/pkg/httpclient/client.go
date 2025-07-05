@@ -13,17 +13,29 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 // Client 是一个可追踪的、可注入的HTTP客户端
 type Client struct {
-	Tracer trace.Tracer
+	Tracer     trace.Tracer
+	HTTPClient *http.Client // ✨ [新增] 持有一个可复用的HTTP客户端实例
 }
 
 // NewClient 创建一个新的客户端实例
 func NewClient(tracer trace.Tracer) *Client {
-	return &Client{Tracer: tracer}
+	// ✨ [改造] 在这里创建 http.Client，并且不设置 Timeout 字段
+	// 让其完全受控于每次请求传入的 context
+	httpClient := &http.Client{
+		// 我们可以配置 Transport 来自定义连接池等行为
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 100,
+		},
+	}
+	return &Client{
+		Tracer:     tracer,
+		HTTPClient: httpClient,
+	}
 }
 
 // Post 是 callService 的重构版本，作为 Client 的一个方法
@@ -59,8 +71,7 @@ func (c *Client) Post(ctx context.Context, serviceURL string, params url.Values)
 	)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
