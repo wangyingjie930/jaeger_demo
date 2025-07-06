@@ -43,3 +43,7 @@ data:
   # "database" 是命名空间。
   REDIS_ADDR: "redis.infra:6379"
   ZK_SERVERS: "zookeeper-headless.infra:2181"
+  # ✨ [核心改动] 修改 REDIS_ADDRS，指向新的集群
+  # 使用 StatefulSet 创建的 Pod 会有稳定的 DNS 名称，格式为: <pod-name>.<service-name>.<namespace>.svc.cluster.local
+  # 这里我们列出所有 Redis 节点的地址，使用完整的FQDN格式
+  REDIS_ADDRS: "redis-cluster-0.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-1.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-2.redis-cluster-headless.infra.svc.cluster.local:6379"

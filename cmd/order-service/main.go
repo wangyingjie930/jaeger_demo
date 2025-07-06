@@ -3,6 +3,17 @@ package main
 
 import (
 	"context"
+	"jaeger-demo/internal/pkg/httpclient"
+	"jaeger-demo/internal/pkg/mq"
+	"jaeger-demo/internal/pkg/redis"
+	"jaeger-demo/internal/pkg/tracing"
+	handler "jaeger-demo/internal/service/order"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
@@ -11,30 +22,22 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
-	"jaeger-demo/internal/pkg/httpclient"
-	"jaeger-demo/internal/pkg/mq"
-	"jaeger-demo/internal/pkg/tracing"
-	handler "jaeger-demo/internal/service/order"
-	"log"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
 	serviceName       = "order-service"
 	notificationTopic = "notifications"
-	requestTimeout    = 3 * time.Second
+	requestTimeout    = 10 * time.Second
 )
 
 // 从环境变量或配置中读取所有下游服务的URL
 var (
 	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
 	kafkaBrokers   = getEnv("KAFKA_BROKERS", "localhost:9092")
+	redisAddrs     = getEnv("REDIS_ADDRS", "localhost:6379,localhost:6380,localhost:6381")
 )
 
-// main 函数是应用的“组装根” (Composition Root)
+// main 函数是应用的"组装根" (Composition Root)
 // 它的核心职责是：创建并组装所有依赖项，然后启动应用。
 func main() {
 	// 1. 初始化核心技术组件
@@ -51,9 +54,23 @@ func main() {
 	kafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), notificationTopic)
 	defer kafkaWriter.Close()
 
+	redisClient, err := redis.NewClient(redisAddrs)
+	if err != nil {
+		log.Fatalf("failed to initialize redis client: %v", err)
+	}
+
+	// ✨ [核心改造] 初始化业务 Service
+	seckillService := handler.NewSeckillService(redisClient)
+
+	// (可选, 用于测试) 准备一个秒杀商品
+	err = seckillService.PrepareSeckillProduct(context.Background(), "product_123", 100)
+	if err != nil {
+		log.Printf("WARN: could not prepare seckill product for testing: %v", err)
+	}
+
 	// 2. 构建责任链 (将依赖项预先绑定)
 	// 这是一个最佳实践，将依赖注入和业务链的构建分离
-	orderChain := buildOrderProcessingChain()
+	orderChain := buildOrderProcessingChain(seckillService)
 
 	// 3. 设置HTTP路由
 	// 使用闭包将已创建的依赖项 (httpClient, kafkaWriter, orderChain) 传递给 Handler
@@ -70,12 +87,13 @@ func main() {
 }
 
 // buildOrderProcessingChain 负责构建和连接责任链中的所有处理器
-func buildOrderProcessingChain() handler.Handler {
+func buildOrderProcessingChain(seckillSvc *handler.SeckillService) handler.Handler {
 	orderHandler := new(handler.TransactionHandler)
-	orderHandler.SetNext(new(handler.FraudCheckHandler)).
-		SetNext(new(handler.InventoryReserveHandler)).
-		SetNext(new(handler.PriceHandler)).
-		SetNext(new(handler.NotificationHandler))
+	orderHandler.SetNext(handler.NewSeckillHandler(seckillSvc)). // 注入 SeckillService
+									SetNext(new(handler.FraudCheckHandler)).
+									SetNext(new(handler.InventoryReserveHandler)).
+									SetNext(new(handler.PriceHandler)).
+									SetNext(new(handler.NotificationHandler))
 
 	return orderHandler
 }

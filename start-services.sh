@@ -16,6 +16,23 @@ NC='\033[0m' # No Color
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# 设置环境变量 (从configmap中提取，保持原始配置)
+export JAEGER_ENDPOINT="http://jaeger.infra:14268/api/traces"
+export KAFKA_BROKERS="kafka-service.infra:9092"
+export ORDER_SERVICE_BASE_URL="http://localhost:8081"
+export FRAUD_DETECTION_SERVICE_URL="http://localhost:8085/check"
+export INVENTORY_SERVICE_URL="http://localhost:8082"
+export INVENTORY_RELEASE_URL="http://localhost:8082/release_stock"
+export INVENTORY_RESERVE_URL="http://localhost:8082/reserve_stock"
+export NOTIFICATION_SERVICE_URL="http://localhost:8083"
+export PRICING_SERVICE_URL="http://localhost:8084/calculate_price"
+export PROMOTION_SERVICE_URL="http://localhost:8087/get_promo_price"
+export SHIPPING_SERVICE_URL="http://localhost:8086/get_quote"
+export DB_SOURCE="root:root@tcp(mysql.infra:3306)/test"
+export REDIS_ADDR="redis.infra:6379"
+export ZK_SERVERS="zookeeper-headless.infra:2181"
+export REDIS_ADDRS="redis-cluster-0.redis-cluster-headless.infra:6379,redis-cluster-1.redis-cluster-headless.infra:6379,redis-cluster-2.redis-cluster-headless.infra:6379"
+
 # <<<<<<< 改造点: 增加新服务 >>>>>>>>>
 SERVICES=(
     "api-gateway:8080"
@@ -28,7 +45,6 @@ SERVICES=(
     "promotion-service:8087"  # 新增
 )
 # <<<<<<< 改造点结束 >>>>>>>>>
-
 
 # 日志文件目录 (使用绝对路径)
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -118,6 +134,7 @@ echo ""
 echo -e "${YELLOW}💡 测试指令示例:${NC}"
 echo -e "  ${GREEN}正常普通用户订单:${NC}"
 echo -e "  curl 'http://localhost:8080/create_complex_order?userId=user-normal-4567&is_vip=false&items=item-a,item-b'"
+echo -e "  curl 'http://localhost:8080/create_complex_order?userId=user-normal-4567&is_vip=false&items=item-a,item-b&seckill_product_id=product_123'"
 echo -e "  ${GREEN}VIP用户大促订单:${NC}"
 echo -e "  curl 'http://localhost:8080/create_complex_order?userId=user-vip-789&is_vip=true&items=item-a,item-b'"
 echo -e "  ${RED}价格服务故障的VIP订单 (触发SAGA补偿):${NC}"

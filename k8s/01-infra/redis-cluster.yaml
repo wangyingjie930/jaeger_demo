@@ -1,0 +1,83 @@
+# k8s/01-infra/redis-cluster.yaml
+
+# ----------------- Redis ConfigMap for Cluster -----------------
+# 用于存放 Redis 集群的配置文件
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-config
+  namespace: infra
+data:
+  redis.conf: |
+    cluster-enabled yes
+    cluster-config-file /data/nodes.conf
+    cluster-node-timeout 5000
+    appendonly yes
+    port 6379
+
+---
+# ----------------- Redis Headless Service -----------------
+# Headless Service 用于为 StatefulSet 中的每个 Pod 提供一个唯一的、稳定的 DNS 记录
+# 这对于 Redis 集群成员之间的相互发现至关重要
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-headless
+  namespace: infra
+spec:
+  clusterIP: None # 标志为 Headless
+  selector:
+    app: redis-cluster
+  ports:
+    - name: client
+      port: 6379
+      targetPort: 6379
+    - name: gossip
+      port: 16379
+      targetPort: 16379
+
+---
+# ----------------- Redis StatefulSet for Cluster -----------------
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: infra
+spec:
+  serviceName: redis-cluster-headless # 必须与 Headless Service 的名字匹配
+  replicas: 3 # 创建 3 个 Redis Pod，可以根据需要调整
+  selector:
+    matchLabels:
+      app: redis-cluster
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.0-alpine
+          command: ["redis-server", "/conf/redis.conf"]
+          ports:
+            - name: client
+              containerPort: 6379
+            - name: gossip # 集群内部通信端口
+              containerPort: 16379
+          volumeMounts:
+            - name: conf
+              mountPath: /conf
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: conf
+          configMap:
+            name: redis-cluster-config
+  # VolumeClaimTemplates 会为每个 Pod 自动创建一个独立的 PVC
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi # 为每个 Redis 节点申请 1GB 存储
