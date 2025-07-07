@@ -3,31 +3,32 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"go.opentelemetry.io/otel/trace"
 	"jaeger-demo/internal/pkg/httpclient"
 	"jaeger-demo/internal/pkg/mq"
 	"jaeger-demo/internal/pkg/redis"
 	"jaeger-demo/internal/pkg/tracing"
-	handler "jaeger-demo/internal/service/order"
+	orderSvc "jaeger-demo/internal/service/order"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
-	serviceName       = "order-service"
-	notificationTopic = "notifications"
-	requestTimeout    = 10 * time.Second
+	serviceName                  = "order-service"
+	notificationTopic            = "notifications"
+	orderProcessingTimeout       = 30 * time.Second // 单个订单处理流程的超时上限
+	orderCreationTopic           = "order-creation-topic"
+	orderCreationConsumerGroupID = "order-creation-consumer-group"
 )
 
 // 从环境变量或配置中读取所有下游服务的URL
@@ -60,7 +61,7 @@ func main() {
 	}
 
 	// ✨ [核心改造] 初始化业务 Service
-	seckillService := handler.NewSeckillService(redisClient)
+	seckillService := orderSvc.NewSeckillService(redisClient)
 
 	// (可选, 用于测试) 准备一个秒杀商品
 	err = seckillService.PrepareSeckillProduct(context.Background(), "product_123", 100)
@@ -72,97 +73,56 @@ func main() {
 	// 这是一个最佳实践，将依赖注入和业务链的构建分离
 	orderChain := buildOrderProcessingChain(seckillService)
 
-	// 3. 设置HTTP路由
-	// 使用闭包将已创建的依赖项 (httpClient, kafkaWriter, orderChain) 传递给 Handler
-	http.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
-		handleCreateOrder(w, r, httpClient, kafkaWriter, orderChain)
-	})
+	// 3. 设置并启动Kafka消费者，用于接收订单创建请求
+	orderCreationReader := mq.NewKafkaReader(
+		strings.Split(kafkaBrokers, ","),
+		orderCreationTopic,
+		orderCreationConsumerGroupID,
+	)
+	defer orderCreationReader.Close()
 
-	http.HandleFunc("/healthz", healthzHandler)
-	http.Handle("/metrics", promhttp.Handler())
+	// 这个Writer专门用于向“通知主题”发送消息
+	notificationKafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), notificationTopic)
+	defer notificationKafkaWriter.Close()
 
-	// 4. 启动服务
-	log.Printf("✅ Order Service is running on :8081, using Chain of Responsibility pattern.")
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	// 4. 启动一个独立的goroutine来暴露健康检查和监控端口
+	go func() {
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+		http.Handle("/metrics", promhttp.Handler())
+		log.Println("✅ Starting health and metrics server on :8081")
+		if err := http.ListenAndServe(":8081", nil); err != nil {
+			log.Fatalf("Failed to start health/metrics server: %v", err)
+		}
+	}()
+
+	// 5. 主goroutine进入无限循环，并发处理消息
+	log.Printf("✅ Order Service (Async Consumer) started. Listening to topic '%s'...", orderCreationTopic)
+	for {
+		msg, err := orderCreationReader.ReadMessage(context.Background())
+		if err != nil {
+			// 如果是连接问题，短暂等待后继续
+			log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderCreationTopic, err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		// 为每个消息的处理启动一个单独的goroutine，以实现并发处理
+		// 这样单个消息的处理失败或耗时不会阻塞其他消息的消费
+		go processOrderMessage(msg, httpClient, notificationKafkaWriter, orderChain, tracer)
+	}
 }
 
 // buildOrderProcessingChain 负责构建和连接责任链中的所有处理器
-func buildOrderProcessingChain(seckillSvc *handler.SeckillService) handler.Handler {
-	orderHandler := new(handler.TransactionHandler)
-	orderHandler.SetNext(handler.NewSeckillHandler(seckillSvc)). // 注入 SeckillService
-									SetNext(new(handler.FraudCheckHandler)).
-									SetNext(new(handler.InventoryReserveHandler)).
-									SetNext(new(handler.PriceHandler)).
-									SetNext(new(handler.NotificationHandler))
+func buildOrderProcessingChain(seckillSvc *orderSvc.SeckillService) orderSvc.Handler {
+	orderHandler := new(orderSvc.TransactionHandler)
+	orderHandler.SetNext(orderSvc.NewSeckillHandler(seckillSvc)). // 注入 SeckillService
+									SetNext(new(orderSvc.FraudCheckHandler)).
+									SetNext(new(orderSvc.InventoryReserveHandler)).
+									SetNext(new(orderSvc.PriceHandler)).
+									SetNext(new(orderSvc.ProcessHandler)).
+									SetNext(new(orderSvc.NotificationHandler))
 
 	return orderHandler
-}
-
-// handleCreateOrder 是每个HTTP请求的入口
-func handleCreateOrder(
-	w http.ResponseWriter,
-	r *http.Request,
-	httpClient *httpclient.Client,
-	kafkaWriter *kafka.Writer,
-	chain handler.Handler,
-) {
-	// ✨ [核心改造点]
-	// 1. 从原始请求中提取 Trace 和 Baggage 上下文
-	propagator := otel.GetTextMapPropagator()
-	// 使用原始请求的上下文作为父上下文
-	parentCtx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-
-	// 2. 创建一个带有超时的子上下文
-	// 整个订单处理流程（从进入责任链到结束）必须在 requestTimeout 内完成
-	ctx, cancel := context.WithTimeout(parentCtx, requestTimeout)
-	defer cancel() // 确保在函数退出时释放资源，无论成功还是失败
-
-	ctx, span := httpClient.Tracer.Start(ctx, "order-service.http_request")
-	defer span.End()
-
-	b := baggage.FromContext(ctx)
-	promoId := b.Member("promotion_id").Value()
-	userID := r.URL.Query().Get("userId")
-
-	span.SetAttributes(
-		attribute.String("user.id", userID),
-		attribute.String("pattern", "Chain of Responsibility + SAGA"),
-	)
-
-	// 2. 为当前请求创建唯一的订单上下文 (OrderContext)
-	// 这是责任链中传递所有状态和依赖的核心对象
-	orderContext := &handler.OrderContext{
-		HTTPClient:  httpClient,
-		KafkaWriter: kafkaWriter,
-		Ctx:         ctx,
-		Writer:      w,
-		Request:     r,
-		Params:      r.URL.Query(),
-		OrderId:     uuid.New().String(),
-		UserId:      userID,
-		IsVIP:       r.URL.Query().Get("is_vip") == "true",
-		Items:       strings.Split(r.URL.Query().Get("items"), ","),
-		PromoId:     promoId,
-	}
-
-	// 3. 启动责任链
-	if err := chain.Handle(orderContext); err != nil {
-		// 对于其他错误，记录日志即可，因为具体的HTTP响应已在链中处理
-		log.Printf("ERROR: Order processing chain failed for order %s: %v", orderContext.OrderId, err)
-
-		// ✨ [错误处理]
-		// 检查错误是否是由于上下文超时引起的
-		if ctx.Err() == context.DeadlineExceeded {
-			// 如果是超时，记录特定的日志并返回一个更友好的错误给客户端
-			span.SetStatus(codes.Error, "Request timed out")
-			span.RecordError(err)
-			http.Error(w, "Request timed out", http.StatusGatewayTimeout) // 504 Gateway Timeout 是一个合适的HTTP状态码
-		} else {
-			span.RecordError(err)
-		}
-	} else {
-		log.Printf("INFO: Order processing chain completed successfully for order %s", orderContext.OrderId)
-	}
 }
 
 func healthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -175,4 +135,66 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// processOrderMessage 是每个Kafka消息的处理核心，实现了完整的业务流程
+func processOrderMessage(
+	msg kafka.Message,
+	httpClient *httpclient.Client,
+	kafkaWriter *kafka.Writer,
+	chain orderSvc.Handler,
+	tracer trace.Tracer,
+) {
+	// 1. 解析消息体
+	var event orderSvc.OrderCreationEvent
+	if err := json.Unmarshal(msg.Value, &event); err != nil {
+		log.Printf("ERROR: Failed to unmarshal event: %v. Message moved to DLQ (simulated).", err)
+		// 在真实生产中，这里应将错误消息推送到“死信队列”(Dead Letter Queue)进行后续分析
+		return
+	}
+
+	// 2. 重建追踪上下文
+	propagator := otel.GetTextMapPropagator()
+	header := mq.KafkaHeaderCarrier(msg.Headers)
+	parentCtx := propagator.Extract(context.Background(), &header)
+	spanOpts := []trace.SpanStartOption{
+		trace.WithAttributes(
+			attribute.String("messaging.system", "kafka"),
+			attribute.String("messaging.destination", msg.Topic),
+			attribute.String("messaging.kafka.message.key", string(msg.Key)),
+			attribute.String("user.id", event.UserID),
+			attribute.String("order.trace_id", event.TraceID),
+		),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+	}
+	ctx, span := tracer.Start(parentCtx, "order-service.ProcessOrderMessage", spanOpts...)
+	defer span.End()
+
+	// 为每个订单的处理流程设置一个独立的超时时间，防止单个订单处理卡死
+	processingCtx, cancel := context.WithTimeout(ctx, orderProcessingTimeout)
+	defer cancel()
+
+	// 3. 构造本次处理的订单上下文
+	orderContext := &orderSvc.OrderContext{
+		HTTPClient:  httpClient,
+		KafkaWriter: kafkaWriter,
+		Ctx:         processingCtx,
+		OrderId:     event.EventId,
+		Event:       &event,
+	}
+
+	log.Printf("INFO: [Order: %s] Starting verification and reservation process for user %s.", orderContext.OrderId, orderContext.Event.UserID)
+
+	// 4. 执行责任链，进行资源预占和验证
+	if err := chain.Handle(orderContext); err != nil {
+		log.Printf("ERROR: [Order: %s] Pre-creation process failed: %v. SAGA compensation automatically triggered.", orderContext.OrderId, err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Order creation failed during pre-check")
+		// (可选) 发送订单创建失败的通知
+		return
+	}
+
+	log.Printf("SUCCESS: [Order: %s] All resources reserved. Creating pending payment order in database (simulated).", orderContext.OrderId)
+	span.AddEvent("Pending payment order created in DB.")
+	// 在此将订单写入数据库，状态为 PENDING_PAYMENT
 }

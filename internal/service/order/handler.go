@@ -2,10 +2,9 @@ package order
 
 import (
 	"context"
+	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
 	"jaeger-demo/internal/pkg/httpclient"
-	"net/http"
-	"net/url"
 	"os"
 	"sync"
 )
@@ -14,14 +13,7 @@ import (
 type OrderContext struct {
 	HTTPClient *httpclient.Client // ✨ [修改] 注入 HTTPClient
 	Ctx        context.Context
-	Writer     http.ResponseWriter
-	Request    *http.Request
-	Params     url.Values
 	OrderId    string
-	UserId     string
-	IsVIP      bool
-	Items      []string
-	PromoId    string
 
 	// ✨ [新增] 补偿函数栈
 	compensations []CompensationFunc
@@ -29,10 +21,12 @@ type OrderContext struct {
 	compLock sync.Mutex
 
 	KafkaWriter *kafka.Writer // ✨ [新增] 注入 Kafka 生产者
+	// ✨ 新增：保存从Kafka接收到的原始事件
+	Event *OrderCreationEvent
 }
 
 // CompensationFunc 定义了补偿操作的函数签名
-type CompensationFunc func()
+type CompensationFunc func(ctx context.Context)
 
 // AddCompensation ✨ [新增] AddCompensation 将一个补偿函数推入栈中
 func (c *OrderContext) AddCompensation(comp CompensationFunc) {
@@ -40,6 +34,17 @@ func (c *OrderContext) AddCompensation(comp CompensationFunc) {
 	defer c.compLock.Unlock()
 	// 使用 LIFO (后进先出) 方式，后注册的补偿先执行
 	c.compensations = append([]CompensationFunc{comp}, c.compensations...)
+}
+
+// TriggerCompensation 负责执行所有已注册的SAGA补偿函数
+func (c *OrderContext) TriggerCompensation(ctx context.Context) {
+	c.compLock.Lock()
+	defer c.compLock.Unlock()
+
+	log.Printf("INFO: [Order: %s] Executing %d compensation functions.", c.OrderId, len(c.compensations))
+	for _, comp := range c.compensations {
+		comp(ctx)
+	}
 }
 
 // Handler 定义了责任链中每个节点的接口

@@ -2,7 +2,9 @@ package order
 
 import (
 	"fmt"
-	"net/http"
+	"go.opentelemetry.io/otel/codes"
+	"net/url"
+	"strings"
 )
 
 type FraudCheckHandler struct {
@@ -18,9 +20,12 @@ func (h *FraudCheckHandler) Handle(orderCtx *OrderContext) error {
 	defer span.End()
 
 	fmt.Println("【责任链】=> 步骤1: 欺诈检测...")
-	if err := orderCtx.HTTPClient.Post(ctx, fraudDetectionServiceURL, orderCtx.Params); err != nil {
+	q := url.Values{}
+	q.Set("items", strings.Join(orderCtx.Event.Items, ","))
+	q.Set("userId", orderCtx.Event.UserID)
+	if err := orderCtx.HTTPClient.Post(ctx, fraudDetectionServiceURL, q); err != nil {
 		span.RecordError(err)
-		http.Error(orderCtx.Writer, "Fraud check failed", http.StatusBadRequest)
+		span.SetStatus(codes.Error, "Fraud check failed")
 		return err // 中断链
 	}
 

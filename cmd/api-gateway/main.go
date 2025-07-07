@@ -2,27 +2,33 @@ package main
 
 import (
 	"context"
-	"io"
+	"encoding/json"
+	"github.com/google/uuid"
+	"github.com/segmentio/kafka-go"
+	"jaeger-demo/internal/pkg/mq"
 	"jaeger-demo/internal/pkg/tracing"
+	"jaeger-demo/internal/service/order"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
-	serviceName = "api-gateway"
+	serviceName        = "api-gateway"
+	orderCreationTopic = "order-creation-topic" // ✨ 新增：订单创建主题
 )
 
 var (
 	jaegerEndpoint      = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
 	orderServiceBaseURL = getEnv("ORDER_SERVICE_BASE_URL", "http://localhost:8081")
+	kafkaBrokers        = getEnv("KAFKA_BROKERS", "localhost:9092")
 )
 
 // <<<<<<< 新增特性开关 >>>>>>>>>
@@ -39,73 +45,103 @@ func main() {
 	}
 	defer tp.Shutdown(context.Background())
 
+	// ✨ 核心改造：初始化一个全局的 Kafka Writer
+	kafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), orderCreationTopic)
+	defer kafkaWriter.Close()
+
 	http.Handle("/metrics", promhttp.Handler())
 
 	// <<<<<<< 新增: 注册健康检查路由 >>>>>>>>>
 	http.HandleFunc("/healthz", healthzHandler)
-	http.HandleFunc("/readyz", readyzHandler)
-	// <<<<<<< 新增结束 >>>>>>>>>
+	// readinessProbe可以简化，因为不再直接依赖order-service的HTTP接口
+	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		// 在异步模型中，网关的就绪状态主要取决于自身和到MQ的连接
+		// 这里可以添加检查Kafka连接状态的逻辑
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
-	http.HandleFunc("/create_complex_order", complexOrderHandler)
+	http.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
+		createOrderHandler(w, r, kafkaWriter)
+	})
 	log.Println("API Gateway listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func complexOrderHandler(w http.ResponseWriter, r *http.Request) {
+func createOrderHandler(w http.ResponseWriter, r *http.Request, writer *kafka.Writer) {
 	tracer := otel.Tracer(serviceName)
 	// 初始上下文
 	ctx := r.Context()
 
-	// <<<<<<< 改造点: Feature Flag 和 Baggage 注入 >>>>>>>>>
 	isVIP := r.URL.Query().Get("is_vip") == "true"
 	isPromotionActive := featureFlags["PROMO_VIP_SUMMER_2025"]
 
 	ctx, span := tracer.Start(ctx, "api-gateway.ComplexOrderHandler")
+	defer span.End()
 
 	span.SetAttributes(
 		attribute.Bool("user.is_vip", isVIP),
 		attribute.Bool("feature_flag.PROMO_VIP_SUMMER_2025", isPromotionActive),
+		attribute.String("messaging.system", "kafka"),
+		attribute.String("messaging.destination", orderCreationTopic),
 	)
 
 	// 如果是VIP用户且活动开启，则通过Baggage向下游传递业务信息
+	var promoId string
 	if isVIP && isPromotionActive {
+		promoId = "VIP_SUMMER_SALE"
 		log.Println("VIP user detected, activating promotion baggage.")
-		promoBaggage, _ := baggage.NewMember("promotion_id", "VIP_SUMMER_SALE")
+		promoBaggage, _ := baggage.NewMember("promotion_id", promoId)
 		b, _ := baggage.FromContext(ctx).SetMember(promoBaggage)
 		ctx = baggage.ContextWithBaggage(ctx, b)
 		span.AddEvent("Baggage with promotion_id injected.")
 	}
-	// <<<<<<< 改造点结束 >>>>>>>>>
-	defer span.End()
 
-	downstreamURL, _ := url.Parse(orderServiceBaseURL + "/create_complex_order")
-	downstreamURL.RawQuery = r.URL.RawQuery
+	// 2. ✨ 核心改造：构建异步消息，而不是HTTP请求
+	quantity, _ := strconv.Atoi(r.URL.Query().Get("quantity"))
+	if quantity == 0 {
+		quantity = 1 // 默认数量
+	}
 
-	span.SetAttributes(
-		attribute.String("http.method", "GET"),
-		attribute.String("downstream.url", downstreamURL.String()),
-	)
+	event := order.OrderCreationEvent{
+		TraceID:          span.SpanContext().TraceID().String(),
+		UserID:           r.URL.Query().Get("userId"),
+		IsVIP:            isVIP,
+		Items:            strings.Split(r.URL.Query().Get("items"), ","),
+		Quantity:         quantity,
+		PromoId:          promoId,
+		SeckillProductID: r.URL.Query().Get("seckill_product_id"),
+		EventId:          uuid.New().String(),
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", downstreamURL.String(), nil)
+	eventBytes, err := json.Marshal(event)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ERROR: Failed to marshal order creation event: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// 注入追踪上下文(包括Baggage)
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	// 3. ✨ 核心改造：使用通用方法发送消息到Kafka
+	// 这个方法会自动注入当前的Trace Context到消息头中
+	err = mq.ProduceMessage(ctx, writer, []byte(event.UserID), eventBytes)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ERROR: Failed to produce message to Kafka: %v", err)
+		span.RecordError(err)
+		http.Error(w, "Failed to submit order request, please try again later.", http.StatusServiceUnavailable)
 		return
 	}
-	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	w.WriteHeader(resp.StatusCode)
-	w.Write(body)
+	span.AddEvent("Order creation request successfully sent to Kafka.")
+	log.Printf("Successfully sent order creation request for user %s to topic %s", event.UserID, orderCreationTopic)
+
+	// 4. ✨ 核心改造：立即返回，给用户良好体验
+	w.WriteHeader(http.StatusAccepted) // 202 Accepted 是一个非常适合此场景的状态码
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":   "pending",
+		"message":  "Your order is being processed. You will receive a notification upon completion.",
+		"event_id": event.EventId,
+	})
 }
 
 func getEnv(key, fallback string) string {
@@ -121,18 +157,3 @@ func healthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
-
-func readyzHandler(w http.ResponseWriter, r *http.Request) {
-	// 对于 readinessProbe，可以加入对下游服务的检查
-	// 这里我们用一个简化的例子：检查 order-service 是否可达
-	// 在真实应用中，你可能需要检查所有关键依赖
-	resp, err := http.Get(orderServiceBaseURL + "/healthz") // 假设 order-service 也实现了 /healthz
-	if err != nil || resp.StatusCode != http.StatusOK {
-		http.Error(w, "Downstream order-service not ready", http.StatusServiceUnavailable)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
-// <<<<<<< 新增结束 >>>>>>>>>

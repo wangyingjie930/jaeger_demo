@@ -1,11 +1,13 @@
 package order
 
 import (
+	"context"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
 	"net/url"
+	"strconv"
 )
 
 type InventoryReserveHandler struct {
@@ -23,30 +25,30 @@ func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 
 	fmt.Println("【责任链】=> 步骤2: 预占库存...")
 
-	quantityStr := orderCtx.Request.URL.Query().Get("quantity")
-	if quantityStr == "" {
+	quantityStr := strconv.Itoa(orderCtx.Event.Quantity)
+	if quantityStr == "0" {
 		quantityStr = "1"
 	}
 
 	var reservedItems []string
-	for _, item := range orderCtx.Items {
+	for _, item := range orderCtx.Event.Items {
 		q := url.Values{}
 		q.Set("itemId", item)
 		q.Set("quantity", quantityStr)
-		q.Set("userId", orderCtx.UserId)
+		q.Set("userId", orderCtx.Event.UserID)
 		q.Set("orderId", orderCtx.OrderId) // 传递订单ID
 		if err := orderCtx.HTTPClient.Post(ctx, inventoryReserveURL, q); err != nil {
 			span.RecordError(err)
 			// ✨ [重大改变] 不再直接调用补偿，只是返回错误
-			http.Error(orderCtx.Writer, fmt.Sprintf("Inventory reservation failed for %s", item), http.StatusInternalServerError)
+			span.SetStatus(codes.Error, fmt.Sprintf("Inventory reservation failed for %s", item))
 			return err
 		}
 
 		// ✨ [重大改变] 预占成功后，注册一个对应的补偿函数
 		// 使用闭包来捕获当前 item 的值
 		currentItem := item
-		orderCtx.AddCompensation(func() {
-			compCtx, compSpan := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "compensation.ReleaseStock")
+		orderCtx.AddCompensation(func(ctx context.Context) {
+			compCtx, compSpan := orderCtx.HTTPClient.Tracer.Start(ctx, "compensation.ReleaseStock")
 			defer compSpan.End()
 
 			compSpan.SetAttributes(attribute.String("item.id", currentItem))

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
-	"net/http"
 	"net/url"
 	"sync"
 )
@@ -25,7 +24,10 @@ func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 	defer span.End()
 
 	fmt.Println("【责任链】=> 步骤3: 动态定价...")
-	isVIP := orderCtx.Request.URL.Query().Get("is_vip")
+	isVIP := ""
+	if orderCtx.Event.IsVIP {
+		isVIP = "true"
+	}
 	b := baggage.FromContext(ctx)
 	promoId := b.Member("promotion_id").Value()
 
@@ -38,7 +40,7 @@ func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 		defer wg.Done()
 		q := url.Values{}
 		q.Set("is_vip", isVIP)
-		q.Set("user_id", orderCtx.UserId)
+		q.Set("user_id", orderCtx.Event.UserID)
 		// 根据Baggage决定调用哪个服务
 		if promoId != "" {
 			span.AddEvent("VIP promotion detected, calling promotion-service")
@@ -74,7 +76,7 @@ func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 		span.SetStatus(codes.Error, "Downstream service call failed")
 
 		// ✨ [重大改变] 不再需要知道如何回滚库存，只需将错误向上抛出
-		http.Error(orderCtx.Writer, combinedErr.Error(), http.StatusInternalServerError)
+		//http.Error(orderCtx.Writer, combinedErr.Error(), http.StatusInternalServerError)
 		return combinedErr
 	}
 

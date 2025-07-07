@@ -5,18 +5,15 @@ import (
 	"fmt"
 	"jaeger-demo/internal/pkg/mq"
 	"log"
-	"net/http"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
 
-// NotificationEvent 定义了要发送到 Kafka 的消息结构
-type NotificationEvent struct {
-	UserID      string `json:"userId"`
-	Message     string `json:"message"`
-	PromotionID string `json:"promotion_id,omitempty"`
-}
+var (
+	paymentTimeout = 3 * time.Second // 支付时限，生产环境应可配置
+)
 
 // NotificationHandler 是责任链的最后一环，负责发送最终通知
 type NotificationHandler struct {
@@ -35,16 +32,19 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 
 	fmt.Println("【责任链】=> 步骤 Final: 发送订单创建成功通知...")
 
-	// 1. 准备消息内容
-	message := "Your complex order has been successfully created!"
-	if orderCtx.PromoId != "" {
-		message = fmt.Sprintf("Your VIP promotion order (%s) has been successfully created!", orderCtx.PromoId)
+	// 准备消息内容
+	message := fmt.Sprintf(
+		"Your order %s is waiting for payment. Please complete it within %v.",
+		orderCtx.OrderId, paymentTimeout,
+	)
+	if orderCtx.Event.PromoId != "" {
+		message = fmt.Sprintf("Your VIP promotion order (%s) has been successfully created!", orderCtx.Event.PromoId)
 	}
 
 	event := NotificationEvent{
-		UserID:      orderCtx.UserId,
+		UserID:      orderCtx.Event.UserID,
 		Message:     message,
-		PromotionID: orderCtx.PromoId,
+		PromotionID: orderCtx.Event.PromoId,
 	}
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
@@ -53,12 +53,12 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		// 虽然通知不是最关键步骤，但序列化失败是程序bug，应该返回错误
-		http.Error(orderCtx.Writer, err.Error(), http.StatusInternalServerError)
+		//http.Error(orderCtx.Writer, err.Error(), http.StatusInternalServerError)
 		return err
 	}
 
 	// 2. 调用 mq 包提供的通用方法来发送消息
-	err = mq.ProduceMessage(ctx, orderCtx.KafkaWriter, []byte(orderCtx.UserId), eventBytes)
+	err = mq.ProduceMessage(ctx, orderCtx.KafkaWriter, []byte(orderCtx.Event.UserID), eventBytes)
 	if err != nil {
 		// ✨ 关键点：发送通知失败，通常不应触发回滚！
 		// 这是一个非关键路径的失败，主订单流程已经成功。
@@ -70,8 +70,8 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 
 	// 3. 成功结束整个HTTP请求
 	span.AddEvent("Complex order finalized and notification sent (or attempted).")
-	orderCtx.Writer.WriteHeader(http.StatusOK)
-	orderCtx.Writer.Write([]byte("Complex order created successfully! (Processed by Chain of Responsibility)"))
+	//orderCtx.Writer.WriteHeader(http.StatusOK)
+	//orderCtx.Writer.Write([]byte("Complex order created successfully! (Processed by Chain of Responsibility)"))
 
 	// 由于这是链的末端，调用 executeNext 会返回 nil
 	return h.executeNext(orderCtx)

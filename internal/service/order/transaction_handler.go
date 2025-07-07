@@ -25,10 +25,7 @@ func (h *TransactionHandler) Handle(orderCtx *OrderContext) (err error) {
 		if err != nil {
 			// 2. 如果链中任何地方返回了错误，执行回滚
 			log.Println("【事务处理器】=> 检测到错误，开始执行回滚...")
-			for _, comp := range orderCtx.compensations {
-				// 执行所有已注册的补偿函数
-				comp()
-			}
+			orderCtx.TriggerCompensation(orderCtx.Ctx)
 			log.Println("【事务处理器】=> 回滚完成。")
 		} else {
 			// 3. 如果一切顺利，事务“提交”（在我们的场景里，可以只是简单记录日志）
