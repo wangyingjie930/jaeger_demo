@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -29,6 +30,11 @@ const (
 	orderProcessingTimeout       = 30 * time.Second // 单个订单处理流程的超时上限
 	orderCreationTopic           = "order-creation-topic"
 	orderCreationConsumerGroupID = "order-creation-consumer-group"
+
+	// ✨ 新增: 定义超时检查的Topic和相关配置
+	orderTimeoutCheckTopic      = "order-timeout-check-topic" // 用于接收到期检查任务的Topic
+	timeoutCheckConsumerGroupID = "timeout-check-consumer-group"
+	delayTopics                 = "delay_topic_5s"
 )
 
 // 从环境变量或配置中读取所有下游服务的URL
@@ -49,12 +55,7 @@ func main() {
 	defer tp.Shutdown(context.Background())
 
 	tracer := otel.Tracer(serviceName)
-
 	httpClient := httpclient.NewClient(tracer)
-
-	kafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), notificationTopic)
-	defer kafkaWriter.Close()
-
 	redisClient, err := redis.NewClient(redisAddrs)
 	if err != nil {
 		log.Fatalf("failed to initialize redis client: %v", err)
@@ -62,7 +63,6 @@ func main() {
 
 	// ✨ [核心改造] 初始化业务 Service
 	seckillService := orderSvc.NewSeckillService(redisClient)
-
 	// (可选, 用于测试) 准备一个秒杀商品
 	err = seckillService.PrepareSeckillProduct(context.Background(), "product_123", 100)
 	if err != nil {
@@ -73,17 +73,15 @@ func main() {
 	// 这是一个最佳实践，将依赖注入和业务链的构建分离
 	orderChain := buildOrderProcessingChain(seckillService)
 
-	// 3. 设置并启动Kafka消费者，用于接收订单创建请求
-	orderCreationReader := mq.NewKafkaReader(
-		strings.Split(kafkaBrokers, ","),
-		orderCreationTopic,
-		orderCreationConsumerGroupID,
-	)
-	defer orderCreationReader.Close()
-
 	// 这个Writer专门用于向“通知主题”发送消息
 	notificationKafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), notificationTopic)
 	defer notificationKafkaWriter.Close()
+
+	kafkaDelayWriters := make(map[string]*kafka.Writer)
+	for _, delayTopic := range strings.Split(delayTopics, ",") {
+		kafkaDelayWriters[delayTopic] = mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), delayTopic)
+		defer kafkaDelayWriters[delayTopic].Close()
+	}
 
 	// 4. 启动一个独立的goroutine来暴露健康检查和监控端口
 	go func() {
@@ -95,21 +93,53 @@ func main() {
 		}
 	}()
 
-	// 5. 主goroutine进入无限循环，并发处理消息
-	log.Printf("✅ Order Service (Async Consumer) started. Listening to topic '%s'...", orderCreationTopic)
-	for {
-		msg, err := orderCreationReader.ReadMessage(context.Background())
-		if err != nil {
-			// 如果是连接问题，短暂等待后继续
-			log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderCreationTopic, err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
+	// ✨ 核心改造: 使用 WaitGroup 管理两个消费者 Goroutine
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-		// 为每个消息的处理启动一个单独的goroutine，以实现并发处理
-		// 这样单个消息的处理失败或耗时不会阻塞其他消息的消费
-		go processOrderMessage(msg, httpClient, notificationKafkaWriter, orderChain, tracer)
-	}
+	// Goroutine 1: 消费订单创建消息 (基本不变)
+	go func() {
+		defer wg.Done()
+		orderCreationReader := mq.NewKafkaReader(
+			strings.Split(kafkaBrokers, ","),
+			orderCreationTopic,
+			orderCreationConsumerGroupID,
+		)
+		defer orderCreationReader.Close()
+		log.Printf("✅ Order Creation Consumer started. Listening to topic '%s'...", orderCreationTopic)
+		for {
+			msg, err := orderCreationReader.ReadMessage(context.Background())
+			if err != nil {
+				log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderCreationTopic, err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			go processOrderMessage(msg, httpClient, notificationKafkaWriter, kafkaDelayWriters, orderChain, tracer)
+		}
+	}()
+
+	// Goroutine 2: ✨ 新增 - 消费订单超时检查消息
+	go func() {
+		defer wg.Done()
+		timeoutCheckReader := mq.NewKafkaReader(
+			strings.Split(kafkaBrokers, ","),
+			orderTimeoutCheckTopic,
+			timeoutCheckConsumerGroupID,
+		)
+		defer timeoutCheckReader.Close()
+		log.Printf("✅ Order Timeout Consumer started. Listening to topic '%s'...", orderTimeoutCheckTopic)
+		for {
+			msg, err := timeoutCheckReader.ReadMessage(context.Background())
+			if err != nil {
+				log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderTimeoutCheckTopic, err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			go orderSvc.ProcessTimeoutCheckMessage(msg, httpClient)
+		}
+	}()
+
+	wg.Wait()
 }
 
 // buildOrderProcessingChain 负责构建和连接责任链中的所有处理器
@@ -141,7 +171,8 @@ func getEnv(key, fallback string) string {
 func processOrderMessage(
 	msg kafka.Message,
 	httpClient *httpclient.Client,
-	kafkaWriter *kafka.Writer,
+	kafkaNotifyWriter *kafka.Writer,
+	kafkaDelayWriters map[string]*kafka.Writer,
 	chain orderSvc.Handler,
 	tracer trace.Tracer,
 ) {
@@ -176,11 +207,13 @@ func processOrderMessage(
 
 	// 3. 构造本次处理的订单上下文
 	orderContext := &orderSvc.OrderContext{
-		HTTPClient:  httpClient,
-		KafkaWriter: kafkaWriter,
-		Ctx:         processingCtx,
-		OrderId:     event.EventId,
-		Event:       &event,
+		HTTPClient:          httpClient,
+		KafkaNotifyWriter:   kafkaNotifyWriter,
+		KafkaDelayWriters:   kafkaDelayWriters,
+		KafkaDelayRealTopic: orderTimeoutCheckTopic,
+		Ctx:                 processingCtx,
+		OrderId:             event.EventId,
+		Event:               &event,
 	}
 
 	log.Printf("INFO: [Order: %s] Starting verification and reservation process for user %s.", orderContext.OrderId, orderContext.Event.UserID)

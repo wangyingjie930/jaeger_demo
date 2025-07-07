@@ -27,7 +27,7 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 
 	span.SetAttributes(
 		attribute.String("messaging.system", "kafka"),
-		attribute.String("messaging.destination", orderCtx.KafkaWriter.Topic),
+		attribute.String("messaging.destination", orderCtx.KafkaNotifyWriter.Topic),
 	)
 
 	fmt.Println("【责任链】=> 步骤 Final: 发送订单创建成功通知...")
@@ -58,7 +58,7 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 	}
 
 	// 2. 调用 mq 包提供的通用方法来发送消息
-	err = mq.ProduceMessage(ctx, orderCtx.KafkaWriter, []byte(orderCtx.Event.UserID), eventBytes)
+	err = mq.ProduceMessage(ctx, orderCtx.KafkaNotifyWriter, []byte(orderCtx.Event.UserID), eventBytes)
 	if err != nil {
 		// ✨ 关键点：发送通知失败，通常不应触发回滚！
 		// 这是一个非关键路径的失败，主订单流程已经成功。

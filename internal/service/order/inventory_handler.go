@@ -6,6 +6,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/httpclient"
 	"net/url"
 	"strconv"
 )
@@ -68,4 +69,20 @@ func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 	span.AddEvent("All Items reserved successfully", trace.WithAttributes(attribute.StringSlice("reserved_items", reservedItems)))
 
 	return h.executeNext(orderCtx)
+}
+
+func (h *InventoryReserveHandler) RollbackAll(ctx context.Context, httpClient *httpclient.Client, orderId string, items []string) {
+	ctx, span := httpClient.Tracer.Start(ctx, "handler.InventoryReserveHandler.Rollback")
+	defer span.End()
+
+	for _, item := range items {
+		releaseParams := url.Values{
+			"itemId":  {item},
+			"orderId": {orderId},
+		}
+		// 在真实世界中，补偿失败需要有重试或告警机制
+		if err := httpClient.Post(ctx, inventoryReleaseURL, releaseParams); err != nil {
+			span.RecordError(err)
+		}
+	}
 }

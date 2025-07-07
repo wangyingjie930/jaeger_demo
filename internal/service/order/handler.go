@@ -20,7 +20,10 @@ type OrderContext struct {
 	// ✨ [新增] 用于保护补偿栈并发安全的锁
 	compLock sync.Mutex
 
-	KafkaWriter *kafka.Writer // ✨ [新增] 注入 Kafka 生产者
+	KafkaNotifyWriter   *kafka.Writer // ✨ [新增] 注入 Kafka 生产者
+	KafkaDelayWriters   map[string]*kafka.Writer
+	KafkaDelayRealTopic string
+
 	// ✨ 新增：保存从Kafka接收到的原始事件
 	Event *OrderCreationEvent
 }

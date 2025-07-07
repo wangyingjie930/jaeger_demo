@@ -43,6 +43,7 @@ SERVICES=(
     "fraud-detection-service:8085"
     "shipping-service:8086"
     "promotion-service:8087"  # 新增
+    "delay-scheduler"
 )
 # <<<<<<< 改造点结束 >>>>>>>>>
 

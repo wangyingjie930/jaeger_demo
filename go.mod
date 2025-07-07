@@ -7,8 +7,10 @@ require (
 	github.com/go-zookeeper/zk v1.0.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/ouqiang/timewheel v1.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
+	github.com/redis/go-redis/v9 v9.11.0
 	github.com/rs/zerolog v1.34.0
 	github.com/segmentio/kafka-go v0.4.48
 	go.opentelemetry.io/otel v1.36.0
@@ -31,7 +33,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/redis/go-redis/v9 v9.11.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

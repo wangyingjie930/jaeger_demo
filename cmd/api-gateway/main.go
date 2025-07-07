@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"jaeger-demo/internal/pkg/mq"
 	"jaeger-demo/internal/pkg/tracing"
 	"jaeger-demo/internal/service/order"
@@ -13,11 +17,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/baggage"
 )
 
 const (

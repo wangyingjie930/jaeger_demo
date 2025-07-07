@@ -2,11 +2,14 @@ package order
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/trace"
-	"time"
-
+	"encoding/json"
 	"github.com/rs/zerolog/log"
+	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/httpclient"
+	"jaeger-demo/internal/pkg/mq"
+	"time"
 )
 
 // mapCarrier 实现了 propagation.TextMapCarrier 接口，用于在内存中传递追踪上下文
@@ -43,20 +46,64 @@ func (h *ProcessHandler) Handle(orderCtx *OrderContext) error {
 	// 设置"超时未支付"自动取消任务 (模拟延迟消息)
 	log.Printf("INFO: [Order: %s] Setting up auto-cancellation task in %v.", orderCtx.OrderId, paymentTimeout)
 
-	time.AfterFunc(paymentTimeout, func() {
-		checkOrderTimeout(ctx, orderCtx)
-	})
+	// 延迟队列 超时未支付取消订单
+	sendTimeoutCheckTask(ctx, orderCtx)
 
 	return h.executeNext(orderCtx)
 }
 
-// checkOrderTimeout 模拟延迟队列的消费者，用于处理订单支付超时
-func checkOrderTimeout(ctx context.Context, orderCtx *OrderContext) {
-	// 实际业务中，我们会从数据库查询订单的最新状态
-	// currentStatus := database.GetOrderStatus(orderCtx.OrderId)
-	// 此处我们模拟一个场景：订单依然是"待支付"状态
-	ctx, span := orderCtx.HTTPClient.Tracer.Start(ctx, "checkOrderTimeout")
+// ✨ 新增: sendTimeoutCheckTask 负责发送延迟的超时检查任务
+func sendTimeoutCheckTask(ctx context.Context, orderCtx *OrderContext) {
+	_, span := orderCtx.HTTPClient.Tracer.Start(ctx, "order-service.SendTimeoutCheckTask")
 	defer span.End()
+
+	taskEvent := OrderTimeoutCheckEvent{
+		TraceID:      trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		OrderID:      orderCtx.OrderId,
+		UserID:       orderCtx.Event.UserID,
+		Items:        orderCtx.Event.Items,
+		CreationTime: time.Now(),
+	}
+	taskBytes, _ := json.Marshal(taskEvent)
+
+	delayTimestamp := time.Now().Add(5 * time.Second).Format(time.RFC3339)
+
+	msg := kafka.Message{
+		Key:   []byte(orderCtx.OrderId),
+		Value: taskBytes,
+		Headers: []kafka.Header{
+			{Key: "real-topic", Value: []byte(orderCtx.KafkaDelayRealTopic)},
+			{Key: "delay-timestamp", Value: []byte(delayTimestamp)},
+		},
+	}
+	mq.InjectTraceContext(ctx, &msg.Headers)
+
+	if err := orderCtx.KafkaDelayWriters["delay_topic_5s"].WriteMessages(ctx, msg); err != nil {
+		log.Printf("ERROR: [Order: %s] Failed to send timeout check task: %v", orderCtx.OrderId, err)
+		span.RecordError(err)
+	} else {
+		log.Printf("INFO: [Order: %s] Sent timeout check task, will be checked around %s.", orderCtx.OrderId, delayTimestamp)
+		span.AddEvent("Timeout check task sent to delay queue.")
+	}
+}
+
+// ✨ 新增: processTimeoutCheckMessage 处理到期的订单检查任务
+func ProcessTimeoutCheckMessage(msg kafka.Message, httpClient *httpclient.Client) {
+	var event OrderTimeoutCheckEvent
+	if err := json.Unmarshal(msg.Value, &event); err != nil {
+		log.Printf("ERROR: Failed to unmarshal timeout event: %v", err)
+		return
+	}
+
+	parentCtx := mq.ExtractTraceContext(context.Background(), msg.Headers)
+	ctx, span := httpClient.Tracer.Start(parentCtx, "order-service.ProcessTimeoutCheck", trace.WithSpanKind(trace.SpanKindConsumer))
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("order.id", event.OrderID),
+		attribute.String("user.id", event.UserID),
+	)
+	log.Printf("INFO: [Order: %s] Timeout checker running.", event.OrderID)
 
 	currentStatus := StatePaid
 	if true {
@@ -65,10 +112,10 @@ func checkOrderTimeout(ctx context.Context, orderCtx *OrderContext) {
 
 	span.SetAttributes(
 		attribute.String("currentStatus", string(currentStatus)),
-		attribute.String("orderId", orderCtx.OrderId),
+		attribute.String("orderId", event.OrderID),
 	)
 
-	log.Printf("INFO: [Order: %s] Timeout checker running. Current status is '%s'.", orderCtx.OrderId, currentStatus)
+	log.Printf("INFO: [Order: %s] Timeout checker running. Current status is '%s'.", event.OrderID, currentStatus)
 
 	// 1. 从当前带有超时的上下文中，提取出纯粹的、不含超时的 Span 上下文信息。
 	//    这部分信息只包含 TraceID, SpanID 等，用于关联链路。
@@ -82,9 +129,10 @@ func checkOrderTimeout(ctx context.Context, orderCtx *OrderContext) {
 	timeoutTaskCtx := trace.ContextWithRemoteSpanContext(detachedCtx, spanContext)
 
 	if currentStatus == StatePendingPayment {
-		log.Printf("WARN: [Order: %s] Order has not been paid within the time limit. Cancelling and releasing resources.", orderCtx.OrderId)
+		log.Printf("WARN: [Order: %s] Order has not been paid within the time limit. Cancelling and releasing resources.", event.OrderID)
 
-		orderCtx.TriggerCompensation(timeoutTaskCtx)
+		//orderCtx.TriggerCompensation(timeoutTaskCtx) todo: 回滚
+		new(InventoryReserveHandler).RollbackAll(timeoutTaskCtx, httpClient, event.OrderID, event.Items)
 		span.AddEvent("TriggerCompensation")
 
 		// (可选) 发送一个订单因超时被取消的通知给用户
