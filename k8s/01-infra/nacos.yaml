@@ -1,0 +1,67 @@
+# k8s/01-infra/nacos.yaml
+# 用于部署 Nacos 服务发现系统
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos
+  namespace: infra
+  labels:
+    app: nacos
+spec:
+  selector:
+    app: nacos
+  ports:
+    - name: http
+      port: 8848
+      targetPort: 8848
+    - name: grpc
+      port: 9848
+      targetPort: 9848
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nacos
+  namespace: infra
+  labels:
+    app: nacos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nacos
+  template:
+    metadata:
+      labels:
+        app: nacos
+    spec:
+      containers:
+        - name: nacos
+          # 使用一个常见的 Nacos 镜像
+          image: nacos/nacos-server:v2.2.3
+          ports:
+            - containerPort: 8848
+            - containerPort: 9848
+          env:
+            # 设置为单机模式启动
+            - name: PREFER_HOST_MODE
+              value: "hostname"
+            - name: MODE
+              value: "standalone"
+            - name: NACOS_AUTH_ENABLE
+              value: "false"
+          # 健康检查，确保 Nacos 服务正常运行
+          readinessProbe:
+            httpGet:
+              path: /nacos/actuator/health
+              port: 8848
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /nacos/actuator/health
+              port: 8848
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5

@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 设置环境变量 (从configmap中提取，保持原始配置)
 export JAEGER_ENDPOINT="http://jaeger.infra:14268/api/traces"
 export KAFKA_BROKERS="kafka-service.infra:9092"
+export NACOS_SERVER_ADDRS="nacos.infra:8848"
 export ORDER_SERVICE_BASE_URL="http://localhost:8081"
 export FRAUD_DETECTION_SERVICE_URL="http://localhost:8085/check"
 export INVENTORY_SERVICE_URL="http://localhost:8082"

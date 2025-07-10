@@ -97,6 +97,8 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 		spanCtx := propagator.Extract(parentCtx, &header)
 		ctx, span := tracer.Start(spanCtx, "scheduler.CheckAndPublish", trace.WithAttributes(
 			attribute.String("delay.level", s.level),
+			attribute.String("now", time.Now().Format(time.DateTime)),
+			attribute.String("delay", msg.Time.Add(s.delay).Format(time.DateTime)),
 		))
 
 		// 2. 计算理论投递时间 (消息存储时间 + 延迟)

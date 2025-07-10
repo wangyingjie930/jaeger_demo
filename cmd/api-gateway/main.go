@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -9,8 +8,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
+	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/mq"
-	"jaeger-demo/internal/pkg/tracing"
 	"jaeger-demo/internal/service/order"
 	"log"
 	"net/http"
@@ -25,9 +24,7 @@ const (
 )
 
 var (
-	jaegerEndpoint      = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
-	orderServiceBaseURL = getEnv("ORDER_SERVICE_BASE_URL", "http://localhost:8081")
-	kafkaBrokers        = getEnv("KAFKA_BROKERS", "localhost:9092")
+	kafkaBrokers = getEnv("KAFKA_BROKERS", "localhost:9092")
 )
 
 // <<<<<<< 新增特性开关 >>>>>>>>>
@@ -38,33 +35,30 @@ var featureFlags = map[string]bool{
 // <<<<<<< 新增特性开关 >>>>>>>>>
 
 func main() {
-	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	defer tp.Shutdown(context.Background())
-
 	// ✨ 核心改造：初始化一个全局的 Kafka Writer
 	kafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), orderCreationTopic)
 	defer kafkaWriter.Close()
 
-	http.Handle("/metrics", promhttp.Handler())
+	bootstrap.StartService(bootstrap.AppInfo{
+		ServiceName: "api-gateway",
+		Port:        8080,
+		RegisterHandlers: func(mux *http.ServeMux) {
+			mux.Handle("/metrics", promhttp.Handler())
+			// <<<<<<< 新增: 注册健康检查路由 >>>>>>>>>
+			mux.HandleFunc("/healthz", healthzHandler)
+			// readinessProbe可以简化，因为不再直接依赖order-service的HTTP接口
+			mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+				// 在异步模型中，网关的就绪状态主要取决于自身和到MQ的连接
+				// 这里可以添加检查Kafka连接状态的逻辑
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			})
 
-	// <<<<<<< 新增: 注册健康检查路由 >>>>>>>>>
-	http.HandleFunc("/healthz", healthzHandler)
-	// readinessProbe可以简化，因为不再直接依赖order-service的HTTP接口
-	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		// 在异步模型中，网关的就绪状态主要取决于自身和到MQ的连接
-		// 这里可以添加检查Kafka连接状态的逻辑
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+			mux.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
+				createOrderHandler(w, r, kafkaWriter)
+			})
+		},
 	})
-
-	http.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
-		createOrderHandler(w, r, kafkaWriter)
-	})
-	log.Println("API Gateway listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func createOrderHandler(w http.ResponseWriter, r *http.Request, writer *kafka.Writer) {
