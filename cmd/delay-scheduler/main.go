@@ -95,9 +95,10 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 		propagator := otel.GetTextMapPropagator()
 		header := mq.KafkaHeaderCarrier(msg.Headers)
 		spanCtx := propagator.Extract(parentCtx, &header)
+		now := time.Now().UTC()
 		ctx, span := tracer.Start(spanCtx, "scheduler.CheckAndPublish", trace.WithAttributes(
 			attribute.String("delay.level", s.level),
-			attribute.String("now", time.Now().Format(time.DateTime)),
+			attribute.String("now", now.Format(time.DateTime)),
 			attribute.String("delay", msg.Time.Add(s.delay).Format(time.DateTime)),
 		))
 
@@ -106,7 +107,7 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 		deliveryTime := msg.Time.Add(s.delay)
 
 		// 3. 判断是否到期
-		if time.Now().After(deliveryTime) {
+		if now.After(deliveryTime) {
 			// 消息到期，进行投递
 			log.Printf("INFO: Message in '%s' is due. DeliveryTime: %v, Now: %v. Publishing...", s.level, deliveryTime, time.Now())
 

@@ -2,9 +2,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"jaeger-demo/internal/pkg/tracing"
+	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/zookeeper"
 	"log"
 	"net/http"
@@ -32,26 +32,16 @@ const (
 )
 
 var (
-	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
 	// <<<< 2. 新增ZooKeeper连接地址的环境变量
 	zkServersEnv = getEnv("ZK_SERVERS", "localhost:2181")
-	tracer       = otel.Tracer(serviceName)
+	tracer       trace.Tracer
 	zkConn       *zookeeper.Conn // <<<< 3. 定义一个全局的ZooKeeper连接变量
 )
 
 func main() {
-	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down tracer provider: %v", err)
-		}
-	}()
-
-	// <<<< 4. 在服务启动时初始化ZooKeeper连接
+	// <<<< 在服务启动时初始化ZooKeeper连接
 	servers := strings.Split(zkServersEnv, ",")
+	var err error
 	zkConn, err = zookeeper.InitZookeeper(servers)
 	if err != nil {
 		log.Fatalf("failed to initialize zookeeper connection: %v", err)
@@ -59,13 +49,17 @@ func main() {
 	// 服务关闭时，也需要关闭ZK连接
 	defer zkConn.Close()
 
-	http.HandleFunc("/check_stock", checkStockHandler)
-	http.HandleFunc("/reserve_stock", reserveStockHandler) // 新增：预占库存
-	http.HandleFunc("/release_stock", releaseStockHandler) // 新增：释放库存
-	// <<<<<<< 改造点结束 >>>>>>>>>
+	bootstrap.StartService(bootstrap.AppInfo{
+		ServiceName: serviceName,
+		Port:        8082,
+		RegisterHandlers: func(mux *http.ServeMux) {
+			tracer = otel.Tracer(serviceName)
 
-	log.Println("Inventory Service listening on :8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
+			mux.HandleFunc("/check_stock", checkStockHandler)
+			mux.HandleFunc("/reserve_stock", reserveStockHandler) // 新增：预占库存
+			mux.HandleFunc("/release_stock", releaseStockHandler) // 新增：释放库存
+		},
+	})
 }
 
 // reserveStockHandler 模拟预占库存 - 已改造

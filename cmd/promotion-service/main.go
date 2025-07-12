@@ -2,9 +2,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"jaeger-demo/internal/pkg/tracing"
+	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/bootstrap"
 	"log"
 	"net/http"
 	"os"
@@ -30,16 +30,18 @@ const (
 )
 
 var (
-	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
-	tracer         = otel.Tracer(serviceName)
+	tracer trace.Tracer
 )
 
 func main() {
-	tp, _ := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
-	defer tp.Shutdown(context.Background())
-	http.HandleFunc("/get_promo_price", handleGetPromoPrice)
-	log.Println("Promotion Service listening on :8087")
-	log.Fatal(http.ListenAndServe(":8087", nil))
+	bootstrap.StartService(bootstrap.AppInfo{
+		ServiceName: serviceName,
+		Port:        8087,
+		RegisterHandlers: func(mux *http.ServeMux) {
+			tracer = otel.Tracer(serviceName)
+			mux.HandleFunc("/get_promo_price", handleGetPromoPrice)
+		},
+	})
 }
 
 func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {

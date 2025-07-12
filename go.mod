@@ -3,7 +3,6 @@ module jaeger-demo
 go 1.24.0
 
 require (
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-zookeeper/zk v1.0.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3

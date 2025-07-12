@@ -1,16 +1,14 @@
 package main
 
 import (
-	"context"
+	"go.opentelemetry.io/otel/propagation"
+	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/tracing"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-
 	// 使用 zerolog 替代标准 log
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -30,8 +28,7 @@ const (
 )
 
 var (
-	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
-	tracer         = otel.Tracer(serviceName)
+	tracer = otel.Tracer(serviceName)
 )
 
 func main() {
@@ -39,27 +36,27 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zlog.Logger = zlog.With().Str("service", serviceName).Logger()
 
-	tp, _ := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
-	defer tp.Shutdown(context.Background())
+	bootstrap.StartService(bootstrap.AppInfo{
+		ServiceName: serviceName,
+		Port:        8086,
+		RegisterHandlers: func(mux *http.ServeMux) {
+			// 使用一个中间件来注入 logger
+			mux.Handle("/get_quote", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// 先提取trace上下文
+				ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
-	// 使用一个中间件来注入 logger
-	http.Handle("/get_quote", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 先提取trace上下文
-		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+				// 然后从提取的上下文中获取trace_id
+				traceID := tracing.GetTraceIDFromContext(ctx)
 
-		// 然后从提取的上下文中获取trace_id
-		traceID := tracing.GetTraceIDFromContext(ctx)
+				logger := zlog.With().Str("trace_id", traceID).Logger()
+				// 将新的 logger 存入 context，以便 handler 使用
+				ctx = logger.WithContext(ctx)
 
-		logger := zlog.With().Str("trace_id", traceID).Logger()
-		// 将新的 logger 存入 context，以便 handler 使用
-		ctx = logger.WithContext(ctx)
-
-		// 调用真正的 handler
-		handleGetQuote(w, r.WithContext(ctx))
-	}))
-
-	zlog.Info().Msg("Shipping Service listening on :8086")
-	log.Fatal(http.ListenAndServe(":8086", nil))
+				// 调用真正的 handler
+				handleGetQuote(w, r.WithContext(ctx))
+			}))
+		},
+	})
 }
 
 func handleGetQuote(w http.ResponseWriter, r *http.Request) {
