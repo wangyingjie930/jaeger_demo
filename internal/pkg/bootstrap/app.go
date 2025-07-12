@@ -30,19 +30,24 @@ type AppInfo struct {
 // StartService 封装了所有微服务的通用启动和优雅关停逻辑。
 func StartService(info AppInfo) {
 	// 1. 从环境变量读取通用配置
-	jaegerEndpoint := getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
 	nacosServerAddrs := getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
-	// ✨ [核心改动] 读取 Nacos 的 Namespace 和 Group 配置
-	nacosNamespace := getEnv("NACOS_NAMESPACE", "")      // 默认为空，即 public 命名空间
-	nacosGroup := getEnv("NACOS_GROUP", "DEFAULT_GROUP") // 默认为 "DEFAULT_GROUP"
+	nacosNamespace := getEnv("NACOS_NAMESPACE", "")
+	nacosGroup := getEnv("NACOS_GROUP", "DEFAULT_GROUP")
 
-	// 2. 初始化核心组件 (Tracer 和 Nacos Client)
-	tp, err := tracing.InitTracerProvider(info.ServiceName, jaegerEndpoint)
+	serverConfigs, err := createNacosServerConfigs(nacosServerAddrs)
+	if err != nil {
+		log.Fatalf("FATAL: Invalid Nacos server address format: %v", err)
+	}
+	clientConfig := createNacosClientConfig(nacosNamespace)
+
+	// 2. 初始化核心组件
+	// a. Tracer
+	tp, err := tracing.InitTracerProvider(info.ServiceName, GetCurrentConfig().Infra.Jaeger.Endpoint)
 	if err != nil {
 		log.Fatalf("failed to initialize tracer provider: %v", err)
 	}
 
-	nacosClient, err := nacos.NewNacosClient(nacosServerAddrs, nacosNamespace, nacosGroup)
+	namingClient, err := nacos.NewNacosClientWithConfigs(serverConfigs, &clientConfig, nacosGroup)
 	if err != nil {
 		log.Fatalf("failed to initialize nacos client: %v", err)
 	}
@@ -54,22 +59,17 @@ func StartService(info AppInfo) {
 	}
 
 	// 4. 执行服务注册
-	err = nacosClient.RegisterServiceInstance(info.ServiceName, ip, info.Port)
+	err = namingClient.RegisterServiceInstance(info.ServiceName, ip, info.Port)
 	if err != nil {
 		log.Fatalf("failed to register service with nacos: %v", err)
 	}
 
-	// 5. 创建 HTTP Server 和 Mux
+	// 5. 创建并启动 HTTP Server
 	mux := http.NewServeMux()
 	if info.RegisterHandlers != nil {
-		info.RegisterHandlers(AppCtx{Mux: mux, Nacos: nacosClient})
+		info.RegisterHandlers(AppCtx{Mux: mux, Nacos: namingClient})
 	}
-	server := &http.Server{
-		Addr:    ":" + strconv.Itoa(info.Port),
-		Handler: mux,
-	}
-
-	// 6. 启动一个 goroutine 来监听 HTTP 服务
+	server := &http.Server{Addr: ":" + strconv.Itoa(info.Port), Handler: mux}
 	go func() {
 		log.Printf("%s listening on :%d", info.ServiceName, info.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -77,8 +77,7 @@ func StartService(info AppInfo) {
 		}
 	}()
 
-	// 7. 设置优雅关停 (Graceful Shutdown)
-	// 这是大厂实践中非常重要的一环，确保服务在退出前能完成清理工作
+	// 6. 优雅关停
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -92,10 +91,14 @@ func StartService(info AppInfo) {
 
 	// 8. 在关停流程中，按顺序执行清理操作 (后进先出)
 	// a. 从 Nacos 注销服务
-	if err := nacosClient.DeregisterServiceInstance(info.ServiceName, ip, info.Port); err != nil {
+	if err := namingClient.DeregisterServiceInstance(info.ServiceName, ip, info.Port); err != nil {
 		log.Printf("Error deregistering from Nacos: %v", err)
 	} else {
 		log.Printf("Service %s deregistered from Nacos.", info.ServiceName)
+	}
+
+	if nacosConfigClient != nil {
+		nacosConfigClient.CloseClient()
 	}
 
 	// b. 关闭 Tracer Provider，确保所有缓冲的 trace 都被发送出去

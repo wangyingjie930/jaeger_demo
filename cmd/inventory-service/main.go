@@ -7,7 +7,6 @@ import (
 	"jaeger-demo/internal/pkg/zookeeper"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -20,28 +19,20 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
-// getEnv 从环境变量中读取配置。
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
 const (
 	serviceName = "inventory-service"
 )
 
 var (
-	// <<<< 2. 新增ZooKeeper连接地址的环境变量
-	zkServersEnv = getEnv("ZK_SERVERS", "localhost:2181")
-	tracer       trace.Tracer
-	zkConn       *zookeeper.Conn // <<<< 3. 定义一个全局的ZooKeeper连接变量
+	tracer trace.Tracer
+	zkConn *zookeeper.Conn // <<<< 3. 定义一个全局的ZooKeeper连接变量
 )
 
 func main() {
+	bootstrap.Init()
+
 	// <<<< 在服务启动时初始化ZooKeeper连接
-	servers := strings.Split(zkServersEnv, ",")
+	servers := strings.Split(bootstrap.GetCurrentConfig().Infra.Zookeeper.Addrs, ",")
 	var err error
 	zkConn, err = zookeeper.InitZookeeper(servers)
 	if err != nil {

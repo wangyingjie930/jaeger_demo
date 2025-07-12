@@ -3,14 +3,11 @@ package nacos
 
 import (
 	"fmt"
-	"log"
-	"strconv"
-	"strings"
-
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"log"
 )
 
 // Client 封装了 Nacos 命名客户端
@@ -21,43 +18,17 @@ type Client struct {
 	groupName   string // ✨ 新增: 存储默认分组名
 }
 
-// NewNacosClient 创建并返回一个新的 Nacos 客户端
-// addrs 格式为 "ip1:port1,ip2:port2"
-func NewNacosClient(addrs string, namespaceId, groupName string) (*Client, error) {
-	if namespaceId == "" {
-		log.Println("⚠️ WARNING: NACOS_NAMESPACE is not set. Using default public namespace.")
-	}
+// ✨ 改造 NewNacosClient 函数，使其不再负责创建配置，只负责创建客户端
+// 原来的 NewNacosClient 改名为 NewNacosClientWithConfigs
+func NewNacosClientWithConfigs(serverConfigs []constant.ServerConfig, clientConfig *constant.ClientConfig, groupName string) (*Client, error) {
 	if groupName == "" {
-		groupName = "DEFAULT_GROUP" // Nacos 默认分组
+		groupName = "DEFAULT_GROUP"
 		log.Printf("⚠️ WARNING: NACOS_GROUP is not set. Using '%s'.", groupName)
 	}
 
-	var serverConfigs []constant.ServerConfig
-	for _, addr := range strings.Split(addrs, ",") {
-		parts := strings.Split(addr, ":")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid nacos address format: %s", addr)
-		}
-		port, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid port in nacos address: %s", parts[1])
-		}
-		serverConfigs = append(serverConfigs, *constant.NewServerConfig(parts[0], port))
-	}
-
-	// 客户端配置
-	clientConfig := *constant.NewClientConfig(
-		constant.WithNotLoadCacheAtStart(true),
-		constant.WithLogDir("/tmp/nacos/log"),
-		constant.WithCacheDir("/tmp/nacos/cache"),
-		constant.WithLogLevel("warn"),
-		constant.WithNamespaceId(namespaceId), // ✨ 核心: 在客户端配置中指定命名空间
-	)
-
-	// 创建命名服务客户端
 	namingClient, err := clients.NewNamingClient(
 		vo.NacosClientParam{
-			ClientConfig:  &clientConfig,
+			ClientConfig:  clientConfig,
 			ServerConfigs: serverConfigs,
 		},
 	)
@@ -65,7 +36,8 @@ func NewNacosClient(addrs string, namespaceId, groupName string) (*Client, error
 		return nil, fmt.Errorf("failed to create nacos naming client: %w", err)
 	}
 
-	log.Println("✅ Successfully connected to Nacos.")
+	namespaceId := clientConfig.NamespaceId
+	log.Printf("✅ Successfully connected to Nacos. Namespace: '%s', Group: '%s'", namespaceId, groupName)
 	return &Client{
 		namingClient: namingClient,
 		namespaceId:  namespaceId,

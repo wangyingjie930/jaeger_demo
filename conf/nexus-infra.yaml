@@ -1,0 +1,16 @@
+# 基础设施连接配置
+# Data ID: nexus-infra.yaml
+#
+# Group: nexus-group
+kafka:
+  brokers: "kafka-service.infra:9092"
+
+redis:
+  # 使用逗号分隔的集群地址
+  addrs: "redis-cluster-0.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-1.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-2.redis-cluster-headless.infra.svc.cluster.local:6379"
+
+jaeger:
+  endpoint: "http://jaeger.infra:14268/api/traces"
+
+zookeeper:
+  addrs: "zookeeper-headless.infra:2181"

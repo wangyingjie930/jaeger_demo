@@ -1,0 +1,10 @@
+# 应用业务逻辑配置
+# Data ID: nexus-app.yaml
+# Group: nexus-group
+
+orderService:
+  processingTimeoutSeconds: 30
+  paymentTimeoutSeconds: 600
+
+featureFlags:
+  enableVipPromotion: true

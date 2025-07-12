@@ -23,10 +23,6 @@ const (
 	orderCreationTopic = "order-creation-topic" // ✨ 新增：订单创建主题
 )
 
-var (
-	kafkaBrokers = getEnv("KAFKA_BROKERS", "localhost:9092")
-)
-
 // <<<<<<< 新增特性开关 >>>>>>>>>
 var featureFlags = map[string]bool{
 	"PROMO_VIP_SUMMER_2025": true, // 硬编码一个特性开关
@@ -35,8 +31,10 @@ var featureFlags = map[string]bool{
 // <<<<<<< 新增特性开关 >>>>>>>>>
 
 func main() {
+	bootstrap.Init()
+
 	// ✨ 核心改造：初始化一个全局的 Kafka Writer
-	kafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), orderCreationTopic)
+	kafkaWriter := mq.NewKafkaWriter(strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ","), orderCreationTopic)
 	defer kafkaWriter.Close()
 
 	bootstrap.StartService(bootstrap.AppInfo{

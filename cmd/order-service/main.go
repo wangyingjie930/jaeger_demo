@@ -27,7 +27,6 @@ import (
 const (
 	serviceName                  = "order-service"
 	notificationTopic            = "notifications"
-	orderProcessingTimeout       = 30 * time.Second // 单个订单处理流程的超时上限
 	orderCreationTopic           = "order-creation-topic"
 	orderCreationConsumerGroupID = "order-creation-consumer-group"
 
@@ -37,17 +36,12 @@ const (
 	delayTopics                 = "delay_topic_5s"
 )
 
-// 从环境变量或配置中读取所有下游服务的URL
-var (
-	jaegerEndpoint = getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
-	kafkaBrokers   = getEnv("KAFKA_BROKERS", "localhost:9092")
-	redisAddrs     = getEnv("REDIS_ADDRS", "localhost:6379,localhost:6380,localhost:6381")
-)
-
 // main 函数是应用的"组装根" (Composition Root)
 // 它的核心职责是：创建并组装所有依赖项，然后启动应用。
 func main() {
-	redisClient, err := redis.NewClient(redisAddrs)
+	bootstrap.Init()
+
+	redisClient, err := redis.NewClient(bootstrap.GetCurrentConfig().Infra.Redis.Addrs)
 	if err != nil {
 		log.Fatalf("failed to initialize redis client: %v", err)
 	}
@@ -65,12 +59,13 @@ func main() {
 	orderChain := buildOrderProcessingChain(seckillService)
 
 	// 这个Writer专门用于向“通知主题”发送消息
-	notificationKafkaWriter := mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), notificationTopic)
+	brokers := strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ",")
+	notificationKafkaWriter := mq.NewKafkaWriter(brokers, notificationTopic)
 	defer notificationKafkaWriter.Close()
 
 	kafkaDelayWriters := make(map[string]*kafka.Writer)
 	for _, delayTopic := range strings.Split(delayTopics, ",") {
-		kafkaDelayWriters[delayTopic] = mq.NewKafkaWriter(strings.Split(kafkaBrokers, ","), delayTopic)
+		kafkaDelayWriters[delayTopic] = mq.NewKafkaWriter(brokers, delayTopic)
 		defer kafkaDelayWriters[delayTopic].Close()
 	}
 
@@ -93,7 +88,7 @@ func main() {
 				go func() {
 					defer wg.Done()
 					orderCreationReader := mq.NewKafkaReader(
-						strings.Split(kafkaBrokers, ","),
+						strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ","),
 						orderCreationTopic,
 						orderCreationConsumerGroupID,
 					)
@@ -114,7 +109,7 @@ func main() {
 				go func() {
 					defer wg.Done()
 					timeoutCheckReader := mq.NewKafkaReader(
-						strings.Split(kafkaBrokers, ","),
+						strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ","),
 						orderTimeoutCheckTopic,
 						timeoutCheckConsumerGroupID,
 					)
@@ -197,7 +192,8 @@ func processOrderMessage(
 	defer span.End()
 
 	// 为每个订单的处理流程设置一个独立的超时时间，防止单个订单处理卡死
-	processingCtx, cancel := context.WithTimeout(ctx, orderProcessingTimeout)
+	currentConfig := bootstrap.GetCurrentConfig()
+	processingCtx, cancel := context.WithTimeout(ctx, time.Duration(currentConfig.App.OrderService.ProcessingTimeoutSeconds)*time.Second)
 	defer cancel()
 
 	// 3. 构造本次处理的订单上下文

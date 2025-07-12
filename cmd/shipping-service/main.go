@@ -5,7 +5,6 @@ import (
 	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/tracing"
 	"net/http"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -13,15 +12,6 @@ import (
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
 )
-
-// getEnv 从环境变量中读取配置。
-// 如果环境变量不存在，则返回提供的默认值。
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
 
 const (
 	serviceName = "shipping-service"
