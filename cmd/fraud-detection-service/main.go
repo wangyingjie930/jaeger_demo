@@ -18,8 +18,8 @@ func main() {
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8085,
-		RegisterHandlers: func(mux *http.ServeMux) {
-			mux.HandleFunc("/check", handleFraudCheck)
+		RegisterHandlers: func(ctx bootstrap.AppCtx) {
+			ctx.Mux.HandleFunc("/check", handleFraudCheck)
 		},
 	})
 }

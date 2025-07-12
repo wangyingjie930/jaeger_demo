@@ -3,6 +3,7 @@ package order
 import (
 	"fmt"
 	"go.opentelemetry.io/otel/codes"
+	"jaeger-demo/internal/pkg/constants"
 	"net/url"
 	"strings"
 )
@@ -23,7 +24,7 @@ func (h *FraudCheckHandler) Handle(orderCtx *OrderContext) error {
 	q := url.Values{}
 	q.Set("items", strings.Join(orderCtx.Event.Items, ","))
 	q.Set("userId", orderCtx.Event.UserID)
-	if err := orderCtx.HTTPClient.Post(ctx, fraudDetectionServiceURL, q); err != nil {
+	if err := orderCtx.HTTPClient.CallService(ctx, constants.FraudDetectionService, constants.FraudCheckPath, q); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Fraud check failed")
 		return err // 中断链

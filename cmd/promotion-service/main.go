@@ -37,9 +37,9 @@ func main() {
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8087,
-		RegisterHandlers: func(mux *http.ServeMux) {
+		RegisterHandlers: func(ctx bootstrap.AppCtx) {
 			tracer = otel.Tracer(serviceName)
-			mux.HandleFunc("/get_promo_price", handleGetPromoPrice)
+			ctx.Mux.HandleFunc("/get_promo_price", handleGetPromoPrice)
 		},
 	})
 }

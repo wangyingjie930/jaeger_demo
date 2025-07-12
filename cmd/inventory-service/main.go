@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/zookeeper"
 	"log"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -52,12 +53,12 @@ func main() {
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8082,
-		RegisterHandlers: func(mux *http.ServeMux) {
+		RegisterHandlers: func(ctx bootstrap.AppCtx) {
 			tracer = otel.Tracer(serviceName)
 
-			mux.HandleFunc("/check_stock", checkStockHandler)
-			mux.HandleFunc("/reserve_stock", reserveStockHandler) // 新增：预占库存
-			mux.HandleFunc("/release_stock", releaseStockHandler) // 新增：释放库存
+			ctx.Mux.HandleFunc("/check_stock", checkStockHandler)
+			ctx.Mux.HandleFunc("/reserve_stock", reserveStockHandler) // 新增：预占库存
+			ctx.Mux.HandleFunc("/release_stock", releaseStockHandler) // 新增：释放库存
 		},
 	})
 }

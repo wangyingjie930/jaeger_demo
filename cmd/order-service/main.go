@@ -4,11 +4,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/httpclient"
 	"jaeger-demo/internal/pkg/mq"
 	"jaeger-demo/internal/pkg/redis"
-	"jaeger-demo/internal/pkg/tracing"
 	orderSvc "jaeger-demo/internal/service/order"
 	"log"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -47,15 +47,6 @@ var (
 // main 函数是应用的"组装根" (Composition Root)
 // 它的核心职责是：创建并组装所有依赖项，然后启动应用。
 func main() {
-	// 1. 初始化核心技术组件
-	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	defer tp.Shutdown(context.Background())
-
-	tracer := otel.Tracer(serviceName)
-	httpClient := httpclient.NewClient(tracer)
 	redisClient, err := redis.NewClient(redisAddrs)
 	if err != nil {
 		log.Fatalf("failed to initialize redis client: %v", err)
@@ -83,63 +74,67 @@ func main() {
 		defer kafkaDelayWriters[delayTopic].Close()
 	}
 
-	// 4. 启动一个独立的goroutine来暴露健康检查和监控端口
-	go func() {
-		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		http.Handle("/metrics", promhttp.Handler())
-		log.Println("✅ Starting health and metrics server on :8081")
-		if err := http.ListenAndServe(":8081", nil); err != nil {
-			log.Fatalf("Failed to start health/metrics server: %v", err)
-		}
-	}()
+	bootstrap.StartService(bootstrap.AppInfo{
+		ServiceName: serviceName,
+		Port:        8081,
+		RegisterHandlers: func(appCtx bootstrap.AppCtx) {
+			tracer := otel.Tracer(serviceName)
+			httpClient := httpclient.NewClient(tracer, appCtx.Nacos)
 
-	// ✨ 核心改造: 使用 WaitGroup 管理两个消费者 Goroutine
-	var wg sync.WaitGroup
-	wg.Add(2)
+			appCtx.Mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+			appCtx.Mux.Handle("/metrics", promhttp.Handler())
 
-	// Goroutine 1: 消费订单创建消息 (基本不变)
-	go func() {
-		defer wg.Done()
-		orderCreationReader := mq.NewKafkaReader(
-			strings.Split(kafkaBrokers, ","),
-			orderCreationTopic,
-			orderCreationConsumerGroupID,
-		)
-		defer orderCreationReader.Close()
-		log.Printf("✅ Order Creation Consumer started. Listening to topic '%s'...", orderCreationTopic)
-		for {
-			msg, err := orderCreationReader.ReadMessage(context.Background())
-			if err != nil {
-				log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderCreationTopic, err)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			go processOrderMessage(msg, httpClient, notificationKafkaWriter, kafkaDelayWriters, orderChain, tracer)
-		}
-	}()
+			go func() {
+				// ✨ 核心改造: 使用 WaitGroup 管理两个消费者 Goroutine
+				var wg sync.WaitGroup
+				wg.Add(2)
 
-	// Goroutine 2: ✨ 新增 - 消费订单超时检查消息
-	go func() {
-		defer wg.Done()
-		timeoutCheckReader := mq.NewKafkaReader(
-			strings.Split(kafkaBrokers, ","),
-			orderTimeoutCheckTopic,
-			timeoutCheckConsumerGroupID,
-		)
-		defer timeoutCheckReader.Close()
-		log.Printf("✅ Order Timeout Consumer started. Listening to topic '%s'...", orderTimeoutCheckTopic)
-		for {
-			msg, err := timeoutCheckReader.ReadMessage(context.Background())
-			if err != nil {
-				log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderTimeoutCheckTopic, err)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			go orderSvc.ProcessTimeoutCheckMessage(msg, httpClient)
-		}
-	}()
+				// Goroutine 1: 消费订单创建消息 (基本不变)
+				go func() {
+					defer wg.Done()
+					orderCreationReader := mq.NewKafkaReader(
+						strings.Split(kafkaBrokers, ","),
+						orderCreationTopic,
+						orderCreationConsumerGroupID,
+					)
+					defer orderCreationReader.Close()
+					log.Printf("✅ Order Creation Consumer started. Listening to topic '%s'...", orderCreationTopic)
+					for {
+						msg, err := orderCreationReader.ReadMessage(context.Background())
+						if err != nil {
+							log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderCreationTopic, err)
+							time.Sleep(5 * time.Second)
+							continue
+						}
+						go processOrderMessage(msg, httpClient, notificationKafkaWriter, kafkaDelayWriters, orderChain, tracer)
+					}
+				}()
 
-	wg.Wait()
+				// Goroutine 2: ✨ 新增 - 消费订单超时检查消息
+				go func() {
+					defer wg.Done()
+					timeoutCheckReader := mq.NewKafkaReader(
+						strings.Split(kafkaBrokers, ","),
+						orderTimeoutCheckTopic,
+						timeoutCheckConsumerGroupID,
+					)
+					defer timeoutCheckReader.Close()
+					log.Printf("✅ Order Timeout Consumer started. Listening to topic '%s'...", orderTimeoutCheckTopic)
+					for {
+						msg, err := timeoutCheckReader.ReadMessage(context.Background())
+						if err != nil {
+							log.Printf("ERROR: could not read message from '%s': %v. Retrying...", orderTimeoutCheckTopic, err)
+							time.Sleep(5 * time.Second)
+							continue
+						}
+						go orderSvc.ProcessTimeoutCheckMessage(msg, httpClient)
+					}
+				}()
+
+				wg.Wait()
+			}()
+		},
+	})
 }
 
 // buildOrderProcessingChain 负责构建和连接责任链中的所有处理器

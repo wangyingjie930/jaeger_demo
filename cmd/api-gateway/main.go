@@ -42,19 +42,19 @@ func main() {
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: "api-gateway",
 		Port:        8080,
-		RegisterHandlers: func(mux *http.ServeMux) {
-			mux.Handle("/metrics", promhttp.Handler())
+		RegisterHandlers: func(appCtx bootstrap.AppCtx) {
+			appCtx.Mux.Handle("/metrics", promhttp.Handler())
 			// <<<<<<< 新增: 注册健康检查路由 >>>>>>>>>
-			mux.HandleFunc("/healthz", healthzHandler)
+			appCtx.Mux.HandleFunc("/healthz", healthzHandler)
 			// readinessProbe可以简化，因为不再直接依赖order-service的HTTP接口
-			mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+			appCtx.Mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 				// 在异步模型中，网关的就绪状态主要取决于自身和到MQ的连接
 				// 这里可以添加检查Kafka连接状态的逻辑
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("OK"))
 			})
 
-			mux.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
+			appCtx.Mux.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
 				createOrderHandler(w, r, kafkaWriter)
 			})
 		},

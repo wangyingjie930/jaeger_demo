@@ -39,9 +39,9 @@ func main() {
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8086,
-		RegisterHandlers: func(mux *http.ServeMux) {
+		RegisterHandlers: func(ctx bootstrap.AppCtx) {
 			// 使用一个中间件来注入 logger
-			mux.Handle("/get_quote", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx.Mux.Handle("/get_quote", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// 先提取trace上下文
 				ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 

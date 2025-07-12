@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
+	"jaeger-demo/internal/pkg/constants"
 	"net/url"
 	"sync"
 )
@@ -12,12 +13,6 @@ import (
 type PriceHandler struct {
 	NextHandler
 }
-
-var (
-	pricingServiceURL   = getEnv("PRICING_SERVICE_URL", "http://localhost:8084/calculate_price")
-	promotionServiceURL = getEnv("PROMOTION_SERVICE_URL", "http://localhost:8087/get_promo_price")
-	shippingServiceURL  = getEnv("SHIPPING_SERVICE_URL", "http://localhost:8086/get_quote")
-)
 
 func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "handler.PriceHandler")
@@ -44,12 +39,12 @@ func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 		// 根据Baggage决定调用哪个服务
 		if promoId != "" {
 			span.AddEvent("VIP promotion detected, calling promotion-service")
-			if err := orderCtx.HTTPClient.Post(ctx, promotionServiceURL, q); err != nil {
+			if err := orderCtx.HTTPClient.CallService(ctx, constants.PromotionService, constants.PromotionGetPromoPricePath, q); err != nil {
 				errs <- fmt.Errorf("promotion service error: %w", err)
 			}
 		} else {
 			span.AddEvent("No promotion, calling standard pricing-service")
-			if err := orderCtx.HTTPClient.Post(ctx, pricingServiceURL, q); err != nil {
+			if err := orderCtx.HTTPClient.CallService(ctx, constants.PricingService, constants.PricingCalculatePricePath, q); err != nil {
 				errs <- fmt.Errorf("pricing service error: %w", err)
 			}
 		}
@@ -58,7 +53,7 @@ func (h *PriceHandler) Handle(orderCtx *OrderContext) error {
 
 	go func() {
 		defer wg.Done()
-		if err := orderCtx.HTTPClient.Post(ctx, shippingServiceURL, url.Values{}); err != nil {
+		if err := orderCtx.HTTPClient.CallService(ctx, constants.ShippingService, constants.ShippingGetQuotePath, url.Values{}); err != nil {
 			errs <- fmt.Errorf("shipping service error: %w", err)
 		}
 	}()

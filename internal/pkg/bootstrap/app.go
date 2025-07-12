@@ -15,11 +15,16 @@ import (
 	"time"
 )
 
+type AppCtx struct {
+	Mux   *http.ServeMux
+	Nacos *nacos.Client
+}
+
 // AppInfo 包含了启动一个微服务所需的所有特定信息。
 type AppInfo struct {
 	ServiceName      string
 	Port             int
-	RegisterHandlers func(mux *http.ServeMux) // 一个函数，允许每个服务注册自己独特的 HTTP 路由
+	RegisterHandlers func(appCtx AppCtx) // 一个函数，允许每个服务注册自己独特的 HTTP 路由
 }
 
 // StartService 封装了所有微服务的通用启动和优雅关停逻辑。
@@ -54,7 +59,7 @@ func StartService(info AppInfo) {
 	// 5. 创建 HTTP Server 和 Mux
 	mux := http.NewServeMux()
 	if info.RegisterHandlers != nil {
-		info.RegisterHandlers(mux)
+		info.RegisterHandlers(AppCtx{Mux: mux, Nacos: nacosClient})
 	}
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(info.Port),

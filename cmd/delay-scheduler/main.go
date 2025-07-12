@@ -99,6 +99,7 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 		ctx, span := tracer.Start(spanCtx, "scheduler.CheckAndPublish", trace.WithAttributes(
 			attribute.String("delay.level", s.level),
 			attribute.String("now", now.Format(time.DateTime)),
+			attribute.String("msg.Time", msg.Time.Format(time.DateTime)),
 			attribute.String("delay", msg.Time.Add(s.delay).Format(time.DateTime)),
 		))
 

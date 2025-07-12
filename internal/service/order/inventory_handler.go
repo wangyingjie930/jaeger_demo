@@ -6,6 +6,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"jaeger-demo/internal/pkg/constants"
 	"jaeger-demo/internal/pkg/httpclient"
 	"net/url"
 	"strconv"
@@ -14,11 +15,6 @@ import (
 type InventoryReserveHandler struct {
 	NextHandler
 }
-
-var (
-	inventoryReserveURL = getEnv("INVENTORY_RESERVE_URL", "http://localhost:8082/reserve_stock")
-	inventoryReleaseURL = getEnv("INVENTORY_RELEASE_URL", "http://localhost:8082/release_stock")
-)
 
 func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.HTTPClient.Tracer.Start(orderCtx.Ctx, "handler.InventoryReserveHandler")
@@ -38,7 +34,7 @@ func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 		q.Set("quantity", quantityStr)
 		q.Set("userId", orderCtx.Event.UserID)
 		q.Set("orderId", orderCtx.OrderId) // 传递订单ID
-		if err := orderCtx.HTTPClient.Post(ctx, inventoryReserveURL, q); err != nil {
+		if err := orderCtx.HTTPClient.CallService(ctx, constants.InventoryService, constants.InventoryReservePath, q); err != nil {
 			span.RecordError(err)
 			// ✨ [重大改变] 不再直接调用补偿，只是返回错误
 			span.SetStatus(codes.Error, fmt.Sprintf("Inventory reservation failed for %s", item))
@@ -59,7 +55,7 @@ func (h *InventoryReserveHandler) Handle(orderCtx *OrderContext) error {
 				"orderId": {orderCtx.OrderId},
 			}
 			// 在真实世界中，补偿失败需要有重试或告警机制
-			if err := orderCtx.HTTPClient.Post(compCtx, inventoryReleaseURL, releaseParams); err != nil {
+			if err := orderCtx.HTTPClient.CallService(compCtx, constants.InventoryService, constants.InventoryReleasePath, releaseParams); err != nil {
 				compSpan.RecordError(err)
 			}
 		})
@@ -81,7 +77,7 @@ func (h *InventoryReserveHandler) RollbackAll(ctx context.Context, httpClient *h
 			"orderId": {orderId},
 		}
 		// 在真实世界中，补偿失败需要有重试或告警机制
-		if err := httpClient.Post(ctx, inventoryReleaseURL, releaseParams); err != nil {
+		if err := httpClient.CallService(ctx, constants.InventoryService, constants.InventoryReleasePath, releaseParams); err != nil {
 			span.RecordError(err)
 		}
 	}
