@@ -33,6 +33,8 @@ export DB_SOURCE="root:root@tcp(mysql.infra:3306)/test"
 export REDIS_ADDR="redis.infra:6379"
 export ZK_SERVERS="zookeeper-headless.infra:2181"
 export REDIS_ADDRS="redis-cluster-0.redis-cluster-headless.infra:6379,redis-cluster-1.redis-cluster-headless.infra:6379,redis-cluster-2.redis-cluster-headless.infra:6379"
+export NACOS_NAMESPACE="d586122c-170f-40e9-9d17-5cede728cd7e" # 假设这是开发环境的Namespace ID
+export NACOS_GROUP="nexus-group"   # 为项目所有服务定义一个统一的分组
 
 # <<<<<<< 改造点: 增加新服务 >>>>>>>>>
 SERVICES=(

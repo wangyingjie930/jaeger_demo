@@ -47,3 +47,7 @@ data:
   # 使用 StatefulSet 创建的 Pod 会有稳定的 DNS 名称，格式为: <pod-name>.<service-name>.<namespace>.svc.cluster.local
   # 这里我们列出所有 Redis 节点的地址，使用完整的FQDN格式
   REDIS_ADDRS: "redis-cluster-0.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-1.redis-cluster-headless.infra.svc.cluster.local:6379,redis-cluster-2.redis-cluster-headless.infra.svc.cluster.local:6379"
+
+  # 这里我们为了演示, 硬编码一个开发环境的ID。你需要在Nacos控制台预先创建好这个命名空间。
+  NACOS_NAMESPACE: "d586122c-170f-40e9-9d17-5cede728cd7e" # 假设这是开发环境的Namespace ID
+  NACOS_GROUP: "nexus-group"   # 为项目所有服务定义一个统一的分组

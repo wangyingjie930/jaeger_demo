@@ -16,11 +16,22 @@ import (
 // Client 封装了 Nacos 命名客户端
 type Client struct {
 	namingClient naming_client.INamingClient
+
+	namespaceId string // ✨ 新增: 存储命名空间ID
+	groupName   string // ✨ 新增: 存储默认分组名
 }
 
 // NewNacosClient 创建并返回一个新的 Nacos 客户端
 // addrs 格式为 "ip1:port1,ip2:port2"
-func NewNacosClient(addrs string) (*Client, error) {
+func NewNacosClient(addrs string, namespaceId, groupName string) (*Client, error) {
+	if namespaceId == "" {
+		log.Println("⚠️ WARNING: NACOS_NAMESPACE is not set. Using default public namespace.")
+	}
+	if groupName == "" {
+		groupName = "DEFAULT_GROUP" // Nacos 默认分组
+		log.Printf("⚠️ WARNING: NACOS_GROUP is not set. Using '%s'.", groupName)
+	}
+
 	var serverConfigs []constant.ServerConfig
 	for _, addr := range strings.Split(addrs, ",") {
 		parts := strings.Split(addr, ":")
@@ -40,6 +51,7 @@ func NewNacosClient(addrs string) (*Client, error) {
 		constant.WithLogDir("/tmp/nacos/log"),
 		constant.WithCacheDir("/tmp/nacos/cache"),
 		constant.WithLogLevel("warn"),
+		constant.WithNamespaceId(namespaceId), // ✨ 核心: 在客户端配置中指定命名空间
 	)
 
 	// 创建命名服务客户端
@@ -54,7 +66,11 @@ func NewNacosClient(addrs string) (*Client, error) {
 	}
 
 	log.Println("✅ Successfully connected to Nacos.")
-	return &Client{namingClient: namingClient}, nil
+	return &Client{
+		namingClient: namingClient,
+		namespaceId:  namespaceId,
+		groupName:    groupName,
+	}, nil
 }
 
 // RegisterServiceInstance 注册一个服务实例到 Nacos
@@ -66,8 +82,8 @@ func (c *Client) RegisterServiceInstance(serviceName, ip string, port int) error
 		Weight:      10,
 		Enable:      true,
 		Healthy:     true,
-		Ephemeral:   true, // 设置为临时节点，心跳断开后会自动摘除
-		GroupName:   "DEFAULT_GROUP",
+		Ephemeral:   true,        // 设置为临时节点，心跳断开后会自动摘除
+		GroupName:   c.groupName, // ✨ 核心: 注册时使用客户端配置的分组
 	})
 	if err != nil {
 		return fmt.Errorf("failed to register service with nacos: %w", err)
@@ -86,7 +102,7 @@ func (c *Client) DeregisterServiceInstance(serviceName, ip string, port int) err
 		Port:        uint64(port),
 		ServiceName: serviceName,
 		Ephemeral:   true,
-		GroupName:   "DEFAULT_GROUP",
+		GroupName:   c.groupName, // ✨ 核心: 注销时使用客户端配置的分组
 	})
 	if err != nil {
 		return fmt.Errorf("failed to deregister service with nacos: %w", err)
@@ -100,7 +116,7 @@ func (c *Client) DeregisterServiceInstance(serviceName, ip string, port int) err
 func (c *Client) DiscoverServiceInstance(serviceName string) (string, int, error) {
 	instance, err := c.namingClient.SelectOneHealthyInstance(vo.SelectOneHealthInstanceParam{
 		ServiceName: serviceName,
-		GroupName:   "DEFAULT_GROUP",
+		GroupName:   c.groupName, // ✨ 核心: 服务发现时指定分组
 	})
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to discover healthy instance for service '%s': %w", serviceName, err)

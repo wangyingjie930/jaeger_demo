@@ -32,6 +32,9 @@ func StartService(info AppInfo) {
 	// 1. 从环境变量读取通用配置
 	jaegerEndpoint := getEnv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
 	nacosServerAddrs := getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
+	// ✨ [核心改动] 读取 Nacos 的 Namespace 和 Group 配置
+	nacosNamespace := getEnv("NACOS_NAMESPACE", "")      // 默认为空，即 public 命名空间
+	nacosGroup := getEnv("NACOS_GROUP", "DEFAULT_GROUP") // 默认为 "DEFAULT_GROUP"
 
 	// 2. 初始化核心组件 (Tracer 和 Nacos Client)
 	tp, err := tracing.InitTracerProvider(info.ServiceName, jaegerEndpoint)
@@ -39,7 +42,7 @@ func StartService(info AppInfo) {
 		log.Fatalf("failed to initialize tracer provider: %v", err)
 	}
 
-	nacosClient, err := nacos.NewNacosClient(nacosServerAddrs)
+	nacosClient, err := nacos.NewNacosClient(nacosServerAddrs, nacosNamespace, nacosGroup)
 	if err != nil {
 		log.Fatalf("failed to initialize nacos client: %v", err)
 	}
