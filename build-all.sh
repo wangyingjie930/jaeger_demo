@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 # 参照你的 start-services.sh 文件定义的服务列表
 # 我们只需要服务名部分
 SERVICES=(
-    "api-gateway"
+#    "api-gateway"
     "order-service"
     "inventory-service"
     "notification-service"

@@ -4,7 +4,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 	"jaeger-demo/internal/pkg/bootstrap"
 	"jaeger-demo/internal/pkg/httpclient"
@@ -13,7 +15,7 @@ import (
 	orderSvc "jaeger-demo/internal/service/order"
 	"log"
 	"net/http"
-	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +62,7 @@ func main() {
 
 	// 这个Writer专门用于向“通知主题”发送消息
 	brokers := strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ",")
+
 	notificationKafkaWriter := mq.NewKafkaWriter(brokers, notificationTopic)
 	defer notificationKafkaWriter.Close()
 
@@ -68,6 +71,10 @@ func main() {
 		kafkaDelayWriters[delayTopic] = mq.NewKafkaWriter(brokers, delayTopic)
 		defer kafkaDelayWriters[delayTopic].Close()
 	}
+
+	// ✨ 核心改造：初始化一个全局的 Kafka Writer
+	orderCreationKafkaWriter := mq.NewKafkaWriter(brokers, orderCreationTopic)
+	defer orderCreationKafkaWriter.Close()
 
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
@@ -78,6 +85,9 @@ func main() {
 
 			appCtx.Mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 			appCtx.Mux.Handle("/metrics", promhttp.Handler())
+			appCtx.Mux.HandleFunc("/create_complex_order", func(w http.ResponseWriter, r *http.Request) {
+				createOrderHandler(w, r, orderCreationKafkaWriter)
+			})
 
 			go func() {
 				// ✨ 核心改造: 使用 WaitGroup 管理两个消费者 Goroutine
@@ -145,18 +155,6 @@ func buildOrderProcessingChain(seckillSvc *orderSvc.SeckillService) orderSvc.Han
 	return orderHandler
 }
 
-func healthzHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
 // processOrderMessage 是每个Kafka消息的处理核心，实现了完整的业务流程
 func processOrderMessage(
 	msg kafka.Message,
@@ -221,4 +219,79 @@ func processOrderMessage(
 	log.Printf("SUCCESS: [Order: %s] All resources reserved. Creating pending payment order in database (simulated).", orderContext.OrderId)
 	span.AddEvent("Pending payment order created in DB.")
 	// 在此将订单写入数据库，状态为 PENDING_PAYMENT
+}
+
+func createOrderHandler(w http.ResponseWriter, r *http.Request, writer *kafka.Writer) {
+	tracer := otel.Tracer(serviceName)
+	// 初始上下文
+	ctx := r.Context()
+
+	isVIP := r.URL.Query().Get("is_vip") == "true"
+
+	ctx, span := tracer.Start(ctx, "api-gateway.ComplexOrderHandler")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Bool("user.is_vip", isVIP),
+		attribute.Bool("feature_flag.PROMO_VIP_SUMMER_2025", bootstrap.GetCurrentConfig().App.FeatureFlags.EnableVipPromotion),
+		attribute.String("messaging.system", "kafka"),
+		attribute.String("messaging.destination", orderCreationTopic),
+	)
+
+	// 如果是VIP用户且活动开启，则通过Baggage向下游传递业务信息
+	var promoId string
+	if isVIP && bootstrap.GetCurrentConfig().App.FeatureFlags.EnableVipPromotion {
+		promoId = "VIP_SUMMER_SALE"
+		log.Println("VIP user detected, activating promotion baggage.")
+		promoBaggage, _ := baggage.NewMember("promotion_id", promoId)
+		b, _ := baggage.FromContext(ctx).SetMember(promoBaggage)
+		ctx = baggage.ContextWithBaggage(ctx, b)
+		span.AddEvent("Baggage with promotion_id injected.")
+	}
+
+	// 2. ✨ 核心改造：构建异步消息，而不是HTTP请求
+	quantity, _ := strconv.Atoi(r.URL.Query().Get("quantity"))
+	if quantity == 0 {
+		quantity = 1 // 默认数量
+	}
+
+	event := orderSvc.OrderCreationEvent{
+		TraceID:          span.SpanContext().TraceID().String(),
+		UserID:           r.URL.Query().Get("userId"),
+		IsVIP:            isVIP,
+		Items:            strings.Split(r.URL.Query().Get("items"), ","),
+		Quantity:         quantity,
+		PromoId:          promoId,
+		SeckillProductID: r.URL.Query().Get("seckill_product_id"),
+		EventId:          uuid.New().String(),
+	}
+
+	eventBytes, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("ERROR: Failed to marshal order creation event: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. ✨ 核心改造：使用通用方法发送消息到Kafka
+	// 这个方法会自动注入当前的Trace Context到消息头中
+	err = mq.ProduceMessage(ctx, writer, []byte(event.UserID), eventBytes)
+	if err != nil {
+		log.Printf("ERROR: Failed to produce message to Kafka: %v", err)
+		span.RecordError(err)
+		http.Error(w, "Failed to submit order request, please try again later.", http.StatusServiceUnavailable)
+		return
+	}
+
+	span.AddEvent("Order creation request successfully sent to Kafka.")
+	log.Printf("Successfully sent order creation request for user %s to topic %s", event.UserID, orderCreationTopic)
+
+	// 4. ✨ 核心改造：立即返回，给用户良好体验
+	w.WriteHeader(http.StatusAccepted) // 202 Accepted 是一个非常适合此场景的状态码
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":   "pending",
+		"message":  "Your order is being processed. You will receive a notification upon completion.",
+		"event_id": event.EventId,
+	})
 }

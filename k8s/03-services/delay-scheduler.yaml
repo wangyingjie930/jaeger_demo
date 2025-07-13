@@ -1,0 +1,38 @@
+# k8s/03-services/delay-scheduler.yaml
+
+# ----------------- Delay Scheduler Deployment -----------------
+# 这个服务是一个后台工作者（Kafka消费者），它不监听任何端口，因此不需要Service资源。
+# 它只需要一个Deployment来确保它在集群中持续运行。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delay-scheduler
+  namespace: jaeger-demo # 部署在统一的应用命名空间
+  labels:
+    app: delay-scheduler
+spec:
+  replicas: 1 # 对于轮询模式的延迟调度，通常先使用单个实例以避免并发问题
+  selector:
+    matchLabels:
+      app: delay-scheduler
+  template:
+    metadata:
+      labels:
+        app: delay-scheduler
+    spec:
+      containers:
+        - name: delay-scheduler
+          # 镜像名称和标签遵循 build-all.sh 中的规范
+          image: jaeger-demo/delay-scheduler:latest
+          imagePullPolicy: Never  # 假设在本地节点构建镜像，不从远程仓库拉取
+          # 这个服务不暴露端口，所以 "ports" 部分可以省略
+          envFrom: # 从 app-config ConfigMap 中注入所有需要的环境变量（如Kafka和Jaeger的地址）
+            - configMapRef:
+                name: app-config
+          resources:
+            requests:
+              cpu: "50m"      # 作为一个后台轮询服务，初始CPU请求可以较低
+              memory: "64Mi"  # 初始内存请求
+            limits:
+              cpu: "200m"
+              memory: "256Mi"

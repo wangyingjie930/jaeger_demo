@@ -33,6 +33,9 @@ WORKDIR /app
 # 这样做无需在 runner 阶段使用任何变量。
 COPY --from=builder /app/bin/service /app/app
 
+# 复制 scripts 目录到容器中，确保 Lua 脚本文件可用
+COPY --from=builder /app/scripts /app/scripts
+
 # 为我们固定命名的 'app' 文件添加可执行权限
 RUN chmod +x /app/app
 
