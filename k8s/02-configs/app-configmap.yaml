@@ -51,3 +51,4 @@ data:
   # 这里我们为了演示, 硬编码一个开发环境的ID。你需要在Nacos控制台预先创建好这个命名空间。
   NACOS_NAMESPACE: "d586122c-170f-40e9-9d17-5cede728cd7e" # 假设这是开发环境的Namespace ID
   NACOS_GROUP: "nexus-group"   # 为项目所有服务定义一个统一的分组
+  NACOS_SERVER_ADDRS: "nacos.infra:8848"
