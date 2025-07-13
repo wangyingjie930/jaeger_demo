@@ -27,6 +27,7 @@ SERVICES=(
     "fraud-detection-service"
     "shipping-service"
     "promotion-service"
+    "order-service-v2"
 )
 
 # 检查是否传入了服务名参数

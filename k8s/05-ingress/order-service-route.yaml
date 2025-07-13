@@ -1,17 +1,25 @@
+# k8s/05-ingress/order-service-route.yaml (兼容旧版本的写法)
 apiVersion: apisix.apache.org/v2
 kind: ApisixRoute
 metadata:
   name: order-service-route
-  namespace: jaeger-demo # 规则要创建在业务服务所在的命名空间
+  namespace: jaeger-demo
 spec:
   ingressClassName: apisix
   http:
-    - name: order-rule
+    - name: order-rule-grayscale_v3
       match:
         hosts:
-          - jaeger-demo.local # 我们用一个自定义的域名来访问
+          - jaeger-demo.local
         paths:
           - /*
+      # 【核心修改】
+      # 不使用 trafficSplit 插件，而是直接在 backends 数组中定义多个服务
+      # 并为每个服务指定 weight (权重)
       backends:
-        - serviceName: order-service # K8s Service 的名字
-          servicePort: 8081 # K8s Service 的端口
+        - serviceName: order-service      # 指向 v1 (稳定版) Service
+          servicePort: 8081
+          weight: 100                    # 分配 90% 的流量
+#        - serviceName: order-service-v2   # 指向 v2 (新版) Service
+#          servicePort: 8081
+#          weight: 100                      # 分配 10% 的流量
