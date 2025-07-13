@@ -1,20 +1,17 @@
-# k8s/05-ingress/order-service-route.yaml
-# helm install apisix apisix/apisix   --set service.type=NodePort   --set ingress-controller.enabled=true   --create-namespace   --namespace ingress-apisix   --set ingress-controller.config.apisix.serviceNamespace=ingress-apisix   --set ingress-controller.config.apisix.adminAPIVersion=$ADMIN_API_VERSION
-
 apiVersion: apisix.apache.org/v2
 kind: ApisixRoute
 metadata:
   name: order-service-route
   namespace: jaeger-demo # 规则要创建在业务服务所在的命名空间
 spec:
+  ingressClassName: apisix
   http:
     - name: order-rule
       match:
         hosts:
-          - "jaeger-demo.local" # 我们用一个自定义的域名来访问
+          - jaeger-demo.local # 我们用一个自定义的域名来访问
         paths:
-          # 将所有请求都转发给 order-service
-          - "/*"
+          - /*
       backends:
         - serviceName: order-service # K8s Service 的名字
           servicePort: 8081 # K8s Service 的端口
