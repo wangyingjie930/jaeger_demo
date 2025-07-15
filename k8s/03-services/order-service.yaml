@@ -8,6 +8,8 @@ metadata:
   namespace: jaeger-demo
   labels:
     app: order-service
+    # 【新增】为 Deployment 添加 version 标签，这是 Istio 进行版本路由的关键
+    version: v1
 spec:
   replicas: 1
   selector:
@@ -17,6 +19,8 @@ spec:
     metadata:
       labels:
         app: order-service
+        # 【新增】为 Pod 模板也添加 version 标签
+        version: v1
     spec:
       containers:
         - name: order-service
@@ -40,7 +44,8 @@ spec:
   selector:
     app: order-service
   ports:
-    - port: 8081
+    - name: http-web
+      port: 8081
       targetPort: 8081
   # ClusterIP 类型的服务，仅在集群内部可见
   type: ClusterIP

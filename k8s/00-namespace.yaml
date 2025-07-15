@@ -8,3 +8,7 @@ metadata:
   # 为我们的演示应用定义一个名为 'jaeger-demo' 的命名空间
   # 之后所有的资源都应该部署在这个命名空间下
   name: jaeger-demo
+  # 【核心修改】
+  # 添加此标签，指示 Istio 在这个命名空间下自动为所有 Pod 注入 Sidecar 代理
+  labels:
+    istio-injection: enabled

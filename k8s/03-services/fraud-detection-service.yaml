@@ -40,7 +40,8 @@ spec:
   selector:
     app: fraud-detection-service
   ports:
-    - port: 8085
+    - name: http-web
+      port: 8085
       targetPort: 8085
   # ClusterIP 类型的服务，仅在集群内部可见
   type: ClusterIP 

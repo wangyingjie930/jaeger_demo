@@ -40,7 +40,8 @@ spec:
   selector:
     app: shipping-service
   ports:
-    - port: 8086
+    - name: http-web
+      port: 8086
       targetPort: 8086
   # ClusterIP 类型的服务，仅在集群内部可见
   type: ClusterIP 

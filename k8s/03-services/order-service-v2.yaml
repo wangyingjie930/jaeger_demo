@@ -6,15 +6,18 @@ metadata:
   namespace: jaeger-demo
   labels:
     app: order-service-v2 # 标签改为 v2
+    version: v2
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: order-service-v2
+      version: v2
   template:
     metadata:
       labels:
         app: order-service-v2
+        version: v2
     spec:
       containers:
         - name: order-service
@@ -26,18 +29,3 @@ spec:
           envFrom:
             - configMapRef:
                 name: app-config
----
-
-# ----------------- Order Service v2 Service -----------------
-apiVersion: v1
-kind: Service
-metadata:
-  name: order-service-v2 # Service 名称改为 v2
-  namespace: jaeger-demo
-spec:
-  selector:
-    app: order-service-v2 # 选择器指向 v2 的 Pod
-  ports:
-    - port: 8081
-      targetPort: 8081
-  type: ClusterIP

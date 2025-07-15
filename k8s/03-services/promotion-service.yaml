@@ -40,7 +40,8 @@ spec:
   selector:
     app: promotion-service
   ports:
-    - port: 8087
+    - name: http-web
+      port: 8087
       targetPort: 8087
   # ClusterIP 类型的服务，仅在集群内部可见
   type: ClusterIP 

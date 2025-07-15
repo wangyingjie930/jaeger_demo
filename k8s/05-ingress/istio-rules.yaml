@@ -1,0 +1,52 @@
+# k8s/05-ingress/istio-rules.yaml
+# 这个文件只包含应用在网格内部的路由规则
+
+# ----------------- Istio VirtualService for Internal Traffic -----------------
+# VirtualService 定义了 “当流量访问 A 服务时，应该如何路由”
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: nexus-internal-vs
+  namespace: jaeger-demo
+spec:
+  # 【核心】'hosts' 字段定义了规则应用的目标服务。
+  # 当网格内的任何服务 (包括从 APISIX 转发来的流量) 尝试访问
+  # "order-service" 这个 K8s Service 时，此 VirtualService 将生效。
+  hosts:
+    - order-service
+  http:
+    # 规则：对 order-service 的所有 HTTP 请求
+    - route:
+        # 【核心】这里定义了灰度发布策略
+        - destination:
+            host: order-service # 目标 K8s Service
+            subset: v1          # 目标是 v1 版本的 Pod
+            weight: 90            # 分配 90% 的流量
+        - destination:
+            host: order-service # 同样的目标 K8s Service
+            subset: v2          # 但目标是 v2 版本的 Pod
+            weight: 10            # 分配 10% 的流量
+---
+
+# ----------------- Istio DestinationRule -----------------
+# DestinationRule 定义了 VirtualService 路由目标的“子集”(subsets)
+# 也就是告诉 Istio，"v1" 和 "v2" 到底是什么意思
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: order-service-dr
+  namespace: jaeger-demo
+spec:
+  # 此规则应用于 'order-service' 这个 K8s Service
+  host: order-service
+  subsets:
+    # 定义一个名为 v1 的子集
+    - name: v1
+      # 这个子集包含了所有带有 "version: v1" 标签的 Pod
+      labels:
+        version: v1
+    # 定义一个名为 v2 的子集
+    - name: v2
+      # 这个子集包含了所有带有 "version: v2" 标签的 Pod
+      labels:
+        version: v2

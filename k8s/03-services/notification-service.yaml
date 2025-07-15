@@ -40,7 +40,8 @@ spec:
   selector:
     app: notification-service
   ports:
-    - port: 8083
+    - name: http-web
+      port: 8083
       targetPort: 8083
   # ClusterIP 类型的服务，仅在集群内部可见
   type: ClusterIP 
