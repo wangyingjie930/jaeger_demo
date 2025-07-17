@@ -1,146 +1,60 @@
-// cmd/promotion-service/main.go
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"go.opentelemetry.io/otel/trace"
-	"log"
-	"net/http"
-	"nexus/internal/pkg/bootstrap"
-	"os"
-	"time"
-
+	_ "github.com/go-sql-driver/mysql" // 导入mysql驱动
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/baggage"
-	"go.opentelemetry.io/otel/propagation"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"log"
+	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/service/promotion/application"
+	"nexus/internal/service/promotion/infrastructure"
+	"nexus/internal/service/promotion/port"
 )
-
-// getEnv 从环境变量中读取配置。
-// 如果环境变量不存在，则返回提供的默认值。
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
 
 const (
 	serviceName = "promotion-service"
 )
 
-var (
-	tracer trace.Tracer
-)
-
 func main() {
+	// 初始化 tracer, nacos 等通用组件
+	bootstrap.Init()
+
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8087,
-		RegisterHandlers: func(ctx bootstrap.AppCtx) {
-			tracer = otel.Tracer(serviceName)
+		RegisterHandlers: func(appCtx bootstrap.AppCtx) {
+			// 1. **连接数据库 (基础设施)**
+			// dsn := bootstrap.GetCurrentConfig().DB.Source
+			dsn := "root:root@tcp(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local" // 应从配置获取
+			db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+			if err != nil {
+				log.Fatalf("failed to connect to database with gorm: %v", err)
+			}
 
-			ctx.Mux.HandleFunc("/get_promo_price", handleGetPromoPrice)
-			ctx.Mux.HandleFunc("/use_coupon", handleUseCoupon)
+			// 2. **自动迁移 (基础设施)**
+			// 使用在 infrastructure 包中定义的 GORM 模型
+			err = db.AutoMigrate(&infrastructure.CouponTemplateModel{}, &infrastructure.UserCouponModel{})
+			if err != nil {
+				log.Printf("WARN: failed to auto migrate gorm models: %v", err)
+			}
+
+			// 3. **创建仓储实例 (基础设施)**
+			couponRepository := infrastructure.NewGormCouponRepository(db)
+
+			// 4. **创建应用服务实例 (应用层)**
+			// 将仓储接口注入到应用服务中
+			tracer := otel.Tracer(serviceName)
+			promoService := application.NewPromotionService(couponRepository, tracer)
+
+			// 5. **创建HTTP处理器 (接口层)**
+			// 将应用服务注入到HTTP处理器中
+			promoHandler := port.NewPromotionHandler(promoService)
+
+			// 6. **启动服务并注册路由**
+			promoHandler.RegisterRoutes(appCtx.Mux)
+
+			log.Printf("✅ Promotion service routes registered.")
 		},
 	})
-}
-
-func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {
-	// 依然先提取通用的追踪上下文
-	propagator := otel.GetTextMapPropagator()
-	ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-
-	// 从Baggage中提取业务上下文
-	promoId := baggage.FromContext(ctx).Member("promotion_id").Value()
-
-	ctx, span := tracer.Start(ctx, "promotion-service.GetPromoPrice")
-	defer span.End()
-
-	// 将业务信息记录到Span的Attribute中，便于排查
-	span.SetAttributes(
-		attribute.String("user.is_vip", r.URL.Query().Get("is_vip")),
-		attribute.String("promotion.id", promoId),
-	)
-
-	log.Printf("Calculating promo price for promotion '%s'", promoId)
-
-	// 模拟促销价格计算的耗时
-	time.Sleep(120 * time.Millisecond)
-
-	if promoId == "" {
-		err := fmt.Errorf("promotion_id is missing from baggage")
-		span.RecordError(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	span.AddEvent("Promotion price calculated successfully")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"price": 79.99, "promo": "` + promoId + `"}`))
-}
-
-// UseCouponRequest 定义了核销优惠券的请求结构
-type UseCouponRequest struct {
-	UserID      string   `json:"user_id"`
-	CouponCode  string   `json:"coupon_code"`
-	OrderID     string   `json:"order_id"`
-	OrderAmount float64  `json:"order_amount"`
-	ItemIDs     []string `json:"item_ids"`
-}
-
-// UseCouponResponse 定义了核销优惠券的响应结构
-type UseCouponResponse struct {
-	Success        bool    `json:"success"`
-	DiscountAmount float64 `json:"discount_amount"`
-	FinalAmount    float64 `json:"final_amount"`
-	Message        string  `json:"message"`
-}
-
-// handleUseCoupon 是核销优惠券的核心逻辑
-func handleUseCoupon(w http.ResponseWriter, r *http.Request) {
-	propagator := otel.GetTextMapPropagator()
-	ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-	ctx, span := tracer.Start(ctx, "promotion-service.UseCoupon")
-	defer span.End()
-
-	var req UseCouponRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	span.SetAttributes(
-		attribute.String("user.id", req.UserID),
-		attribute.String("coupon.code", req.CouponCode),
-		attribute.String("order.id", req.OrderID),
-	)
-
-	// 在这里实现完整的核销逻辑:
-	// 1. 检查 coupon_code 是否存在、是否属于该用户、状态是否为“未使用”。
-	// 2. 根据 template_id 查询优惠券模板信息。
-	// 3. 校验适用范围 (scope_type, scope_value) 和门槛 (threshold_amount)。
-	// 4. 如果校验通过:
-	//    a. 计算优惠金额。
-	//    b. **【核心】将 user_coupon 表中的状态更新为 "已冻结(FROZEN)"**, 并记录 order_id。
-	//    c. 返回计算后的价格。
-	// 5. 如果校验失败，返回错误信息。
-
-	// 模拟核销成功
-	log.Printf("Coupon %s for order %s has been used (frozen).", req.CouponCode, req.OrderID)
-
-	// 模拟计算
-	discount := 10.0
-	finalAmount := req.OrderAmount - discount
-
-	resp := UseCouponResponse{
-		Success:        true,
-		DiscountAmount: discount,
-		FinalAmount:    finalAmount,
-		Message:        "Coupon applied successfully",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
 }
