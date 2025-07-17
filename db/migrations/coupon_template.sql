@@ -1,0 +1,22 @@
+CREATE TABLE `coupon_template` (
+                                   `id` BIGINT UNSIGNED NOT-NULL AUTO_INCREMENT COMMENT '自增主键',
+                                   `template_code` VARCHAR(64) NOT-NULL UNIQUE COMMENT '模板唯一编码, 用于发券',
+                                   `name` VARCHAR(128) NOT-NULL COMMENT '优惠券名称',
+                                   `description` VARCHAR(255) DEFAULT '' COMMENT '优惠券描述',
+                                   `type` TINYINT UNSIGNED NOT-NULL COMMENT '优惠券类型: 1-满减, 2-折扣, 3-无门槛',
+                                   `discount_value` DECIMAL(10, 2) NOT-NULL COMMENT '优惠金额或折扣率',
+                                   `threshold_amount` DECIMAL(10, 2) DEFAULT 0.00 COMMENT '使用门槛金额 (满多少可用)',
+                                   `scope_type` TINYINT UNSIGNED NOT-NULL COMMENT '适用范围: 1-全场, 2-指定商品分类, 3-指定商品',
+                                   `scope_value` TEXT COMMENT '适用范围的值 (如商品ID列表,逗号分隔)',
+                                   `total_quantity` BIGINT NOT-NULL COMMENT '总发行量',
+                                   `issued_quantity` BIGINT DEFAULT 0 COMMENT '已领取数量',
+                                   `validity_type` TINYINT UNSIGNED NOT-NULL COMMENT '有效期类型: 1-固定日期, 2-领取后生效',
+                                   `valid_from` TIMESTAMP NULL DEFAULT NULL COMMENT '固定有效期开始时间',
+                                   `valid_to` TIMESTAMP NULL DEFAULT NULL COMMENT '固定有效期结束时间',
+                                   `valid_days` INT UNSIGNED DEFAULT 0 COMMENT '领取后多少天内有效',
+                                   `status` TINYINT UNSIGNED NOT-NULL DEFAULT 1 COMMENT '模板状态: 1-有效, 2-无效',
+                                   `created_at` TIMESTAMP NOT-NULL DEFAULT CURRENT_TIMESTAMP,
+                                   `updated_at` TIMESTAMP NOT-NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                   PRIMARY KEY (`id`),
+                                   INDEX `idx_template_code` (`template_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券模板表';

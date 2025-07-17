@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
 	"log"
@@ -39,7 +40,9 @@ func main() {
 		Port:        8087,
 		RegisterHandlers: func(ctx bootstrap.AppCtx) {
 			tracer = otel.Tracer(serviceName)
+
 			ctx.Mux.HandleFunc("/get_promo_price", handleGetPromoPrice)
+			ctx.Mux.HandleFunc("/use_coupon", handleUseCoupon)
 		},
 	})
 }
@@ -76,4 +79,68 @@ func handleGetPromoPrice(w http.ResponseWriter, r *http.Request) {
 	span.AddEvent("Promotion price calculated successfully")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"price": 79.99, "promo": "` + promoId + `"}`))
+}
+
+// UseCouponRequest 定义了核销优惠券的请求结构
+type UseCouponRequest struct {
+	UserID      string   `json:"user_id"`
+	CouponCode  string   `json:"coupon_code"`
+	OrderID     string   `json:"order_id"`
+	OrderAmount float64  `json:"order_amount"`
+	ItemIDs     []string `json:"item_ids"`
+}
+
+// UseCouponResponse 定义了核销优惠券的响应结构
+type UseCouponResponse struct {
+	Success        bool    `json:"success"`
+	DiscountAmount float64 `json:"discount_amount"`
+	FinalAmount    float64 `json:"final_amount"`
+	Message        string  `json:"message"`
+}
+
+// handleUseCoupon 是核销优惠券的核心逻辑
+func handleUseCoupon(w http.ResponseWriter, r *http.Request) {
+	propagator := otel.GetTextMapPropagator()
+	ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx, span := tracer.Start(ctx, "promotion-service.UseCoupon")
+	defer span.End()
+
+	var req UseCouponRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	span.SetAttributes(
+		attribute.String("user.id", req.UserID),
+		attribute.String("coupon.code", req.CouponCode),
+		attribute.String("order.id", req.OrderID),
+	)
+
+	// 在这里实现完整的核销逻辑:
+	// 1. 检查 coupon_code 是否存在、是否属于该用户、状态是否为“未使用”。
+	// 2. 根据 template_id 查询优惠券模板信息。
+	// 3. 校验适用范围 (scope_type, scope_value) 和门槛 (threshold_amount)。
+	// 4. 如果校验通过:
+	//    a. 计算优惠金额。
+	//    b. **【核心】将 user_coupon 表中的状态更新为 "已冻结(FROZEN)"**, 并记录 order_id。
+	//    c. 返回计算后的价格。
+	// 5. 如果校验失败，返回错误信息。
+
+	// 模拟核销成功
+	log.Printf("Coupon %s for order %s has been used (frozen).", req.CouponCode, req.OrderID)
+
+	// 模拟计算
+	discount := 10.0
+	finalAmount := req.OrderAmount - discount
+
+	resp := UseCouponResponse{
+		Success:        true,
+		DiscountAmount: discount,
+		FinalAmount:    finalAmount,
+		Message:        "Coupon applied successfully",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
