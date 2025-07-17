@@ -104,3 +104,43 @@ func (s *PromotionService) UseCoupon(ctx context.Context, req *UseCouponRequest)
 
 	return resp, nil
 }
+
+// ✨ [新增] CancelCouponUsage 是 UseCoupon 的补偿方法
+// 用于在 SAGA 模式下，当订单处理失败时，回滚优惠券的状态
+func (s *PromotionService) CancelCouponUsage(ctx context.Context, req *UseCouponRequest) error {
+	ctx, span := s.tracer.Start(ctx, "service.CancelCouponUsage (Compensation)")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("user.id", req.UserID),
+		attribute.String("coupon.code", req.CouponCode),
+		attribute.String("order.id", req.OrderID),
+	)
+
+	// 1. 再次获取优惠券
+	userCoupon, err := s.couponRepo.FindByCode(ctx, req.CouponCode)
+	if err != nil {
+		// 如果补偿时券都找不到了，这是一个严重问题，需要记录错误但不能中断其他补偿
+		span.RecordError(err)
+		return fmt.Errorf("compensation failed: %w", err)
+	}
+
+	// 2. 只有处于冻结状态的券才能被回滚
+	if userCoupon.Status != domain.StatusFrozen {
+		err := fmt.Errorf("coupon status is not 'FROZEN', cannot compensate. Current status: %d", userCoupon.Status)
+		span.RecordError(err)
+		return err
+	}
+
+	// 3. 将状态回滚为“未使用”
+	userCoupon.Status = domain.StatusUnused
+	if err := s.couponRepo.Save(ctx, userCoupon); err != nil {
+		span.RecordError(err)
+		return fmt.Errorf("failed to save coupon status during compensation: %w", err)
+	}
+
+	log.Printf("Compensation: Coupon %s for order %s has been rolled back to UNUSED.", req.CouponCode, req.OrderID)
+	span.AddEvent("Coupon status rolled back to UNUSED")
+
+	return nil
+}

@@ -76,14 +76,27 @@ func (uc *UserCoupon) CanUse(orderAmount float64, itemIDs []string) (float64, er
 		return 0, ErrCouponNotApplicable
 	}
 
-	// 检查适用范围 (此处为简化逻辑)
-	// 实际项目中需要根据 scopeType 和 scopeValue 检查 itemIDs
+	// ✨ [核心改造] 检查适用范围
 	isApplicable := false
-	if uc.Template.ScopeType == ScopeAll {
+	switch uc.Template.ScopeType {
+	case ScopeAll:
 		isApplicable = true
-	} else {
-		// 复杂的范围检查逻辑...
-		isApplicable = true // 简化处理
+	case ScopeSpecificSKU:
+		// 如果订单中的任何一个商品ID在优惠券的适用范围内，则认为可用
+		itemScope := make(map[string]struct{})
+		for _, id := range uc.Template.ScopeValue {
+			itemScope[id] = struct{}{}
+		}
+		for _, orderItemID := range itemIDs {
+			if _, ok := itemScope[orderItemID]; ok {
+				isApplicable = true
+				break
+			}
+		}
+	case ScopeCategory:
+		// 这是一个更复杂的场景，需要查询商品属于哪个分类，然后与ScopeValue进行匹配
+	default:
+		isApplicable = false // 未知范围类型，默认不可用
 	}
 
 	if !isApplicable {
@@ -96,7 +109,12 @@ func (uc *UserCoupon) CanUse(orderAmount float64, itemIDs []string) (float64, er
 	case TypeFixedAmount, TypeNoThreshold:
 		discountAmount = uc.Template.DiscountValue
 	case TypeDiscount:
+		// 注意：折扣券的DiscountValue通常是折扣率，比如0.8代表八折
+		// 计算出的应该是优惠掉的金额
 		discountAmount = orderAmount * (1 - uc.Template.DiscountValue)
+		if discountAmount < 0 {
+			discountAmount = 0
+		}
 	}
 
 	return discountAmount, nil
