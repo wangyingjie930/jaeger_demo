@@ -5,7 +5,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
-  namespace: jaeger-demo
+  namespace: nexus
   labels:
     app: order-service
     # 【新增】为 Deployment 添加 version 标签，这是 Istio 进行版本路由的关键
@@ -25,7 +25,7 @@ spec:
       containers:
         - name: order-service
           # 镜像地址来自 build-all.sh 脚本
-          image: jaeger-demo/order-service:latest
+          image: nexus/order-service:latest
           imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8081
@@ -39,7 +39,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: order-service
-  namespace: jaeger-demo
+  namespace: nexus
 spec:
   selector:
     app: order-service

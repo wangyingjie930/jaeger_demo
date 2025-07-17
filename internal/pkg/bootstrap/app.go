@@ -3,11 +3,11 @@ package bootstrap
 
 import (
 	"context"
-	"jaeger-demo/internal/pkg/nacos"
-	"jaeger-demo/internal/pkg/tracing"
-	"jaeger-demo/internal/pkg/utils"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/nacos"
+	"nexus/internal/pkg/tracing"
+	"nexus/internal/pkg/utils"
 	"os"
 	"os/signal"
 	"strconv"

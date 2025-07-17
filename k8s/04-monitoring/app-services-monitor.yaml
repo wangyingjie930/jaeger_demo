@@ -8,7 +8,7 @@ metadata:
 spec:
   namespaceSelector:
     matchNames:
-      - jaeger-demo                # 指定只扫描 'jaeger-demo' 这个命名空间下的 Service
+      - nexus                # 指定只扫描 'nexus' 这个命名空间下的 Service
   selector:
     matchLabels:
       monitor: "true"            # <-- 核心：匹配所有带 monitor: "true" 标签的 Service

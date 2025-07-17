@@ -5,9 +5,9 @@ package httpclient
 import (
 	"context"
 	"fmt"
-	"jaeger-demo/internal/pkg/nacos"
 	"net/http"
 	"net/url"
+	"nexus/internal/pkg/nacos"
 	"strings"
 
 	"go.opentelemetry.io/otel"

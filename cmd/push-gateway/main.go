@@ -4,9 +4,9 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"jaeger-demo/internal/pkg/session"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/session"
 	"os"
 	"sync"
 )

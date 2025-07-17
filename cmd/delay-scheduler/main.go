@@ -3,9 +3,9 @@ package main
 
 import (
 	"context"
-	"jaeger-demo/internal/pkg/mq"
-	"jaeger-demo/internal/pkg/tracing"
 	"log"
+	"nexus/internal/pkg/mq"
+	"nexus/internal/pkg/tracing"
 	"os"
 	"strings"
 	"sync"

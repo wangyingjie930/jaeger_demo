@@ -3,10 +3,10 @@ package main
 
 import (
 	"fmt"
-	"jaeger-demo/internal/pkg/bootstrap"
-	"jaeger-demo/internal/pkg/zookeeper"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/zookeeper"
 	"strconv"
 	"strings"
 	"time"

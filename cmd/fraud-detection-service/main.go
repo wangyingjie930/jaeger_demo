@@ -1,9 +1,9 @@
 package main
 
 import (
-	"jaeger-demo/internal/pkg/bootstrap"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/bootstrap"
 	"time"
 
 	"go.opentelemetry.io/otel"

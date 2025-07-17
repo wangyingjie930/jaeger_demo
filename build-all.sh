@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # build-all.sh
-# 自动为 jaeger-demo 项目中的微服务构建Docker镜像。
+# 自动为 nexus 项目中的微服务构建Docker镜像。
 # 用法: ./build-all.sh [服务名]
 # 如果不传参数，则构建所有服务；如果传入服务名，则只构建该服务
 
@@ -57,7 +57,7 @@ ACR_REGISTRY="crpi-4dj6hqy7jwojfw8v.cn-shanghai.personal.cr.aliyuncs.com/yingjie
 
 # 循环遍历服务列表
 for service in "${SERVICES_TO_BUILD[@]}"; do
-    IMAGE_TAG="jaeger-demo/${service}:latest"
+    IMAGE_TAG="nexus/${service}:latest"
     ACR_IMAGE="${ACR_REGISTRY}/${service}:latest"
 
     echo -e "🔧 正在构建服务: ${BLUE}${service}${NC}，镜像标签为: ${GREEN}${IMAGE_TAG}${NC}"
@@ -77,4 +77,4 @@ done
 echo -e "${GREEN}🎉 所有目标服务的镜像均已成功构建！${NC}"
 echo
 echo -e "${BLUE}以下是本次构建的镜像列表:${NC}"
-docker images | grep "jaeger-demo"
+docker images | grep "nexus"

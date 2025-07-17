@@ -4,9 +4,9 @@ package main
 import (
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
-	"jaeger-demo/internal/pkg/bootstrap"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/bootstrap"
 	"os"
 	"time"
 

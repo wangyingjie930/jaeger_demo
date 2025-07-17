@@ -3,8 +3,8 @@ package order
 import (
 	"encoding/json"
 	"fmt"
-	"jaeger-demo/internal/pkg/mq"
 	"log"
+	"nexus/internal/pkg/mq"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"

@@ -2,8 +2,8 @@
 #kind: Kustomization
 #
 #metadata:
-#  name: jaeger-demo
-#  namespace: jaeger-demo
+#  name: nexus
+#  namespace: nexus
 #
 #resources:
 #  # 命名空间
@@ -30,8 +30,8 @@
 #
 ## 通用标签
 #commonLabels:
-#  app.kubernetes.io/name: jaeger-demo
-#  app.kubernetes.io/part-of: jaeger-demo
+#  app.kubernetes.io/name: nexus
+#  app.kubernetes.io/part-of: nexus
 #  app.kubernetes.io/version: v1.0.0
 #
 ## 通用注解

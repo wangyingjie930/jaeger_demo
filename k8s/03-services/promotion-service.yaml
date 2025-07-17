@@ -5,7 +5,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: promotion-service
-  namespace: jaeger-demo
+  namespace: nexus
   labels:
     app: promotion-service
 spec:
@@ -21,7 +21,7 @@ spec:
       containers:
         - name: promotion-service
           # 镜像地址来自 build-all.sh 脚本
-          image: jaeger-demo/promotion-service:latest
+          image: nexus/promotion-service:latest
           imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8087
@@ -35,7 +35,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: promotion-service
-  namespace: jaeger-demo
+  namespace: nexus
 spec:
   selector:
     app: promotion-service

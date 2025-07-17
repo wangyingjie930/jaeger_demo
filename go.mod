@@ -1,4 +1,4 @@
-module jaeger-demo
+module nexus
 
 go 1.24.0
 

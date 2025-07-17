@@ -2,9 +2,9 @@ package main
 
 import (
 	"go.opentelemetry.io/otel/propagation"
-	"jaeger-demo/internal/pkg/bootstrap"
-	"jaeger-demo/internal/pkg/tracing"
 	"net/http"
+	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/tracing"
 	"time"
 
 	"go.opentelemetry.io/otel"

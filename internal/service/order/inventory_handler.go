@@ -6,9 +6,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"jaeger-demo/internal/pkg/constants"
-	"jaeger-demo/internal/pkg/httpclient"
 	"net/url"
+	"nexus/internal/pkg/constants"
+	"nexus/internal/pkg/httpclient"
 	"strconv"
 )
 

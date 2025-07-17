@@ -5,7 +5,7 @@
 #kind: Deployment
 #metadata:
 #  name: api-gateway
-#  namespace: jaeger-demo
+#  namespace: nexus
 #  labels:
 #    app: api-gateway
 #spec:
@@ -21,7 +21,7 @@
 #      containers:
 #        - name: api-gateway
 #          # 镜像地址来自 build-all.sh 脚本
-#          image: jaeger-demo/api-gateway:latest
+#          image: nexus/api-gateway:latest
 #          imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
 #          ports:
 #            - containerPort: 8080 # 容器暴露的端口
@@ -70,7 +70,7 @@
 #kind: Service
 #metadata:
 #  name: api-gateway
-#  namespace: jaeger-demo
+#  namespace: nexus
 #  labels:
 #    app: api-gateway
 #    monitor: "true"  # <-- 添加这个统一的标签

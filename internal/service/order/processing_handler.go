@@ -7,8 +7,8 @@ import (
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"jaeger-demo/internal/pkg/httpclient"
-	"jaeger-demo/internal/pkg/mq"
+	"nexus/internal/pkg/httpclient"
+	"nexus/internal/pkg/mq"
 	"time"
 )
 

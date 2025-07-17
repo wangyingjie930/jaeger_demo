@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: delay-scheduler
-  namespace: jaeger-demo # 部署在统一的应用命名空间
+  namespace: nexus # 部署在统一的应用命名空间
   labels:
     app: delay-scheduler
 spec:
@@ -23,7 +23,7 @@ spec:
       containers:
         - name: delay-scheduler
           # 镜像名称和标签遵循 build-all.sh 中的规范
-          image: jaeger-demo/delay-scheduler:latest
+          image: nexus/delay-scheduler:latest
           imagePullPolicy: Never  # 假设在本地节点构建镜像，不从远程仓库拉取
           # 这个服务不暴露端口，所以 "ports" 部分可以省略
           envFrom: # 从 app-config ConfigMap 中注入所有需要的环境变量（如Kafka和Jaeger的地址）

@@ -7,7 +7,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: nexus-internal-vs
-  namespace: jaeger-demo
+  namespace: nexus
 spec:
   # 【核心】'hosts' 字段定义了规则应用的目标服务。
   # 当网格内的任何服务 (包括从 APISIX 转发来的流量) 尝试访问
@@ -35,7 +35,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
   name: order-service-dr
-  namespace: jaeger-demo
+  namespace: nexus
 spec:
   # 此规则应用于 'order-service' 这个 K8s Service
   host: order-service

@@ -3,14 +3,14 @@ apiVersion: apisix.apache.org/v2
 kind: ApisixRoute
 metadata:
   name: order-service-route
-  namespace: jaeger-demo
+  namespace: nexus
 spec:
   ingressClassName: apisix
   http:
     - name: order-rule-passthrough
       match:
         hosts:
-          - jaeger-demo.local
+          - nexus.local
         paths:
           - /*
       # 【核心修改】

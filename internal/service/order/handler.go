@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
-	"jaeger-demo/internal/pkg/httpclient"
+	"nexus/internal/pkg/httpclient"
 	"os"
 	"sync"
 )

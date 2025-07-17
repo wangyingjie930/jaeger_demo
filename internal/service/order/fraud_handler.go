@@ -3,8 +3,8 @@ package order
 import (
 	"fmt"
 	"go.opentelemetry.io/otel/codes"
-	"jaeger-demo/internal/pkg/constants"
 	"net/url"
+	"nexus/internal/pkg/constants"
 	"strings"
 )
 

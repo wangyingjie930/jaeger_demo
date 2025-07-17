@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"jaeger-demo/internal/pkg/mq"
-	"jaeger-demo/internal/pkg/session"
 	"log"
+	"nexus/internal/pkg/mq"
+	"nexus/internal/pkg/session"
 	"os"
 	"strings"
 

@@ -54,5 +54,5 @@ spec:
       port: 14268
       targetPort: 14268
   # type: ClusterIP 表示这个 Service 只在集群内部可见。
-  # 其他服务可以通过 'jaeger.jaeger-demo.svc.cluster.local' 或简写 'jaeger' (在同一命名空间下) 来访问它。
+  # 其他服务可以通过 'jaeger.nexus.svc.cluster.local' 或简写 'jaeger' (在同一命名空间下) 来访问它。
   type: ClusterIP

@@ -3,7 +3,7 @@ package order
 import (
 	"context"
 	"fmt"
-	"jaeger-demo/internal/pkg/redis"
+	"nexus/internal/pkg/redis"
 )
 
 // SeckillResultCode 是秒杀脚本返回的业务状态码
