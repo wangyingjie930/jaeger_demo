@@ -28,6 +28,7 @@ SERVICES=(
     "shipping-service"
     "promotion-service"
     "order-service-v2"
+#    "delay-scheduler"
 )
 
 # 检查是否传入了服务名参数

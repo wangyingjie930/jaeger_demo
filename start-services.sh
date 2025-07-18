@@ -130,6 +130,8 @@ for service_config in "${SERVICES[@]}"; do
     sleep 1
 done
 
+# curl 'http://localhost:9081/create_complex_order?userId=user-normal-4567&is_vip=false&items=item-a,item-b' -H 'Host: nexus.local'
+
 echo -e "${GREEN}🎉 所有服务启动完成！${NC}"
 echo -e "${BLUE}📋 服务状态和访问点:${NC}"
 echo -e "  - Jaeger UI: http://localhost:16686"

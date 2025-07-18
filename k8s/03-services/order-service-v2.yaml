@@ -2,28 +2,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: order-service-v2 # 名称改为 v2
+  name: order-service-v2
   namespace: nexus
   labels:
-    app: order-service-v2 # 标签改为 v2
-    version: v2
+    # Deployment本身的标签，可以任意，方便管理
+    app.kubernetes.io/name: order-service-v2
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: order-service-v2
+      #【关键】这里的 selector 必须和下面 template 中的 labels 完全对应
+      app: order-service
       version: v2
   template:
     metadata:
       labels:
-        app: order-service-v2
-        version: v2
+        #【关键】这里的标签组合是Istio能够识别和路由流量的核心
+        app: order-service   # 这个标签让主 Service(order-service) 能找到 v2 的 Pod
+        version: v2          # 这个标签让 Istio DestinationRule 能识别出 v2 版本
     spec:
       containers:
         - name: order-service
-          # 假设这是你的新版本镜像
+          # 确保这里是你的v2版本镜像
           image: nexus/order-service-v2:latest
-          imagePullPolicy: IfNotPresent # 使用本地镜像
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
           envFrom:

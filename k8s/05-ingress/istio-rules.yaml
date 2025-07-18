@@ -21,11 +21,11 @@ spec:
         - destination:
             host: order-service # 目标 K8s Service
             subset: v1          # 目标是 v1 版本的 Pod
-            weight: 90            # 分配 90% 的流量
+          weight: 10            # 【正确位置】分配 90% 的流量
         - destination:
             host: order-service # 同样的目标 K8s Service
             subset: v2          # 但目标是 v2 版本的 Pod
-            weight: 10            # 分配 10% 的流量
+          weight: 90            # 【正确位置】分配 10% 的流量
 ---
 
 # ----------------- Istio DestinationRule -----------------
