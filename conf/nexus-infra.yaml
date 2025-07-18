@@ -14,3 +14,6 @@ jaeger:
 
 zookeeper:
   addrs: "zookeeper-headless.infra:2181"
+
+mysql:
+  addrs: "mysql.infra:3306"

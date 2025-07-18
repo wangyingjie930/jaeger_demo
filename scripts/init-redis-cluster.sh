@@ -17,6 +17,17 @@ echo "  - redis-cluster-0: $REDIS_0_IP"
 echo "  - redis-cluster-1: $REDIS_1_IP"
 echo "  - redis-cluster-2: $REDIS_2_IP"
 
+kubectl exec -n infra redis-cluster-0 -- redis-cli FLUSHALL
+kubectl exec -n infra redis-cluster-0 -- redis-cli CLUSTER RESET
+
+echo "🗑️  清理 redis-cluster-1..."
+kubectl exec -n infra redis-cluster-1 -- redis-cli FLUSHALL
+kubectl exec -n infra redis-cluster-1 -- redis-cli CLUSTER RESET
+
+echo "🗑️  清理 redis-cluster-2..."
+kubectl exec -n infra redis-cluster-2 -- redis-cli FLUSHALL
+kubectl exec -n infra redis-cluster-2 -- redis-cli CLUSTER RESET
+
 # 等待节点启动
 echo "⏳ 等待 Redis 节点启动..."
 sleep 5

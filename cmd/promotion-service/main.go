@@ -1,15 +1,16 @@
 package main
 
 import (
-	_ "github.com/go-sql-driver/mysql" // 导入mysql驱动
-	"go.opentelemetry.io/otel"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 	"log"
 	"nexus/internal/pkg/bootstrap"
 	"nexus/internal/service/promotion/application"
 	"nexus/internal/service/promotion/infrastructure"
 	"nexus/internal/service/promotion/port"
+
+	_ "github.com/go-sql-driver/mysql" // 导入mysql驱动
+	"go.opentelemetry.io/otel"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 const (
@@ -26,7 +27,7 @@ func main() {
 		RegisterHandlers: func(appCtx bootstrap.AppCtx) {
 			// 1. **连接数据库 (基础设施)**
 			// dsn := bootstrap.GetCurrentConfig().DB.Source
-			dsn := "root:root@tcp(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local" // 应从配置获取
+			dsn := bootstrap.GetCurrentConfig().Infra.Mysql.Addrs // 应从配置获取
 			db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 			if err != nil {
 				log.Fatalf("failed to connect to database with gorm: %v", err)

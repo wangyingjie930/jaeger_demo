@@ -18,5 +18,5 @@ spec:
       # APISIX 的任务只是把流量转发给 order-service 这个 K8s Service。
       # 它不再关心 order-service 背后有几个版本，这些由 Istio 处理。
       backend:
-        serviceName: order-service
-        servicePort: 8081
+        - serviceName: order-service
+          servicePort: 8081

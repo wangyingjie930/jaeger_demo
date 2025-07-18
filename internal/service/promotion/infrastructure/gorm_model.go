@@ -2,9 +2,10 @@ package infrastructure
 
 import (
 	"database/sql"
-	"gorm.io/gorm"
 	"nexus/internal/service/promotion/domain"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // CouponTemplateModel 对应数据库中的 coupon_template 表
@@ -35,7 +36,7 @@ func (CouponTemplateModel) TableName() string {
 // UserCouponModel 对应数据库中的 user_coupon 表
 type UserCouponModel struct {
 	gorm.Model
-	CouponCode string `gorm:"uniqueIndex"`
+	CouponCode string `gorm:"uniqueIndex;size:255"`
 	UserID     string
 	TemplateID uint
 	Status     domain.UserCouponStatus `gorm:"type:tinyint;default:1"`

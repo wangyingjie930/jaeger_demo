@@ -52,17 +52,12 @@ spec:
               value: "2181"
             - name: ZOOKEEPER_TICK_TIME
               value: "2000"
-          volumeMounts: # 将持久化存储挂载到容器内
+          volumeMounts: # 将临时存储挂载到容器内
             - name: zookeeper-data
               mountPath: /var/lib/zookeeper/data
-  volumeClaimTemplates: # 卷声明模板，为每个 Pod 自动创建独立的持久卷（PersistentVolume）
-    - metadata:
-        name: zookeeper-data
-      spec:
-        accessModes: [ "ReadWriteOnce" ] # 卷可以被单个节点读写
-        resources:
-          requests:
-            storage: 5Gi # 为每个 Zookeeper 实例申请 5GB 的存储空间
+      volumes: # 使用临时存储卷
+        - name: zookeeper-data
+          emptyDir: {} # 临时目录，Pod重启后数据会丢失
 
 ---
 # ----------------- Kafka -----------------
@@ -129,11 +124,6 @@ spec:
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
-  volumeClaimTemplates: # 为每个 Kafka broker 自动创建持久化存储
-    - metadata:
-        name: kafka-data
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: 10Gi # 为每个 Kafka 实例申请 10GB 的存储空间
+      volumes: # 使用临时存储卷
+        - name: kafka-data
+          emptyDir: {} # 临时目录，Pod重启后数据会丢失

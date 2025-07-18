@@ -26,6 +26,9 @@ type InfraConfig struct {
 	Zookeeper struct {
 		Addrs string `yaml:"addrs"`
 	} `yaml:"zookeeper"`
+	Mysql struct {
+		Addrs string `yaml:"addrs"`
+	}
 }
 
 // AppConfig 存放业务逻辑配置
