@@ -4,7 +4,7 @@ import (
 	"context"
 	"go.opentelemetry.io/otel/trace"
 	"nexus/internal/service/order/domain"
-	"nexus/internal/service/order/port" // <-- 依赖抽象端口
+	"nexus/internal/service/order/domain/port"
 	"sync"
 
 	"github.com/rs/zerolog/log"

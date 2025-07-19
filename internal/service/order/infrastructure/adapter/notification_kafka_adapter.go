@@ -21,8 +21,7 @@ type NotificationKafkaAdapter struct {
 }
 
 // NewNotificationKafkaAdapter 创建一个新的通知生产者适配器。
-func NewNotificationKafkaAdapter(brokers []string) *NotificationKafkaAdapter {
-	writer := mq.NewKafkaWriter(brokers, notificationTopic)
+func NewNotificationKafkaAdapter(writer *kafka.Writer) *NotificationKafkaAdapter {
 	return &NotificationKafkaAdapter{writer: writer}
 }
 

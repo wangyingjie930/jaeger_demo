@@ -1,7 +1,10 @@
 // internal/service/order/domain/event.go
 package domain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // OrderCreationRequested 是当用户请求创建一个新订单时发布的事件
 // 注意：这更像一个命令的载体，但在异步流程中，我们将其视为一个触发事件。
@@ -50,4 +53,8 @@ type OrderTimeoutCheckEvent struct {
 	Items   []string `json:"items"`
 	// 为了方便追踪和调试，可以加上事件创建的时间
 	CreationTime time.Time `json:"creationTime"`
+}
+
+type OrderProducer interface {
+	Product(ctx context.Context, event *OrderCreationRequested) error
 }

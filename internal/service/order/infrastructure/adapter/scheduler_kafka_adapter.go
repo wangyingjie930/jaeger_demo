@@ -12,9 +12,7 @@ import (
 
 const (
 	// 定义延迟主题和真实的目标主题
-	delayTopic      = "delay_topic_5s" // 假设我们使用5秒延迟
-	realTopic       = "order-timeout-check-topic"
-	paymentDeadline = 5 * time.Second // 与延迟主题匹配
+	realTopic = "order-timeout-check-topic"
 )
 
 // SchedulerKafkaAdapter 实现了 port.DelayScheduler 接口。
@@ -23,9 +21,9 @@ type SchedulerKafkaAdapter struct {
 }
 
 // NewSchedulerKafkaAdapter 创建一个新的延迟任务调度器适配器。
-func NewSchedulerKafkaAdapter(brokers []string) *SchedulerKafkaAdapter {
+func NewSchedulerKafkaAdapter(delayWriter *kafka.Writer) *SchedulerKafkaAdapter {
 	return &SchedulerKafkaAdapter{
-		delayWriter: mq.NewKafkaWriter(brokers, delayTopic),
+		delayWriter: delayWriter,
 	}
 }
 

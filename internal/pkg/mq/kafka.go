@@ -3,10 +3,11 @@ package mq
 
 import (
 	"context"
-	"github.com/segmentio/kafka-go"
-	"go.opentelemetry.io/otel"
 	"log"
 	"time"
+
+	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
 )
 
 // KafkaHeaderCarrier 实现了 opentelemetry.TextMapCarrier 接口

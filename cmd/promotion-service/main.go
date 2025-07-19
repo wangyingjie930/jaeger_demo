@@ -5,7 +5,7 @@ import (
 	"nexus/internal/pkg/bootstrap"
 	"nexus/internal/service/promotion/application"
 	"nexus/internal/service/promotion/infrastructure"
-	"nexus/internal/service/promotion/port"
+	"nexus/internal/service/promotion/interfaces"
 
 	_ "github.com/go-sql-driver/mysql" // 导入mysql驱动
 	"go.opentelemetry.io/otel"
@@ -50,7 +50,7 @@ func main() {
 
 			// 5. **创建HTTP处理器 (接口层)**
 			// 将应用服务注入到HTTP处理器中
-			promoHandler := port.NewPromotionHandler(promoService)
+			promoHandler := interfaces.NewPromotionHandler(promoService)
 
 			// 6. **启动服务并注册路由**
 			promoHandler.RegisterRoutes(appCtx.Mux)
