@@ -8,6 +8,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	"gopkg.in/yaml.v3"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,14 +56,18 @@ var (
 	configLock = new(sync.RWMutex)
 	// Nacos 配置客户端，在Init中创建，在StartService的优雅关停中关闭
 	nacosConfigClient config_client.IConfigClient
+
+	nacosServerAddrs string
+	nacosNamespace   string
+	nacosGroup       string
 )
 
 // Init 是应用启动的第一步，负责加载所有配置
 func Init() {
 	// 1. 获取最基础的引导配置 (Nacos地址)
-	nacosServerAddrs := getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
-	nacosNamespace := getEnv("NACOS_NAMESPACE", "")
-	nacosGroup := getEnv("NACOS_GROUP", "DEFAULT_GROUP")
+	nacosServerAddrs = getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
+	nacosNamespace = getEnv("NACOS_NAMESPACE", "")
+	nacosGroup = getEnv("NACOS_GROUP", "DEFAULT_GROUP")
 
 	// 2. 创建 Nacos 客户端配置
 	serverConfigs, err := createNacosServerConfigs(nacosServerAddrs)
@@ -156,4 +161,12 @@ func createNacosClientConfig(namespaceId string) constant.ClientConfig {
 		constant.WithCacheDir("/tmp/nacos/cache"),
 		constant.WithLogLevel("warn"),
 	)
+}
+
+// getEnv 是一个内部辅助函数，从环境变量中读取配置。
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

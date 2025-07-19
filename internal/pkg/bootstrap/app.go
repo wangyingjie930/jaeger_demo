@@ -29,11 +29,6 @@ type AppInfo struct {
 
 // StartService 封装了所有微服务的通用启动和优雅关停逻辑。
 func StartService(info AppInfo) {
-	// 1. 从环境变量读取通用配置
-	nacosServerAddrs := getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
-	nacosNamespace := getEnv("NACOS_NAMESPACE", "")
-	nacosGroup := getEnv("NACOS_GROUP", "DEFAULT_GROUP")
-
 	serverConfigs, err := createNacosServerConfigs(nacosServerAddrs)
 	if err != nil {
 		log.Fatalf("FATAL: Invalid Nacos server address format: %v", err)
@@ -116,12 +111,4 @@ func StartService(info AppInfo) {
 	}
 
 	log.Printf("Service %s gracefully shut down.", info.ServiceName)
-}
-
-// getEnv 是一个内部辅助函数，从环境变量中读取配置。
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
 }

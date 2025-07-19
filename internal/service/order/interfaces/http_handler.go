@@ -16,11 +16,8 @@ import (
 )
 
 const (
-	serviceName                  = "order-service"
-	orderCreationTopic           = "order-creation-topic"
-	orderCreationConsumerGroupID = "order-creation-consumer-group"
-	orderTimeoutCheckTopic       = "order-timeout-check-topic"
-	delayTopics                  = "delay_topic_5s" // 示例延迟主题，应从配置读取
+	serviceName        = "order-service"
+	orderCreationTopic = "order-creation-topic"
 )
 
 // OrderHandler 封装了 promotion 服务的 HTTP 处理器

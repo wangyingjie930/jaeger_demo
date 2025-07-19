@@ -1,5 +1,5 @@
 // internal/service/order/infrastructure/adapter/kafka_consumer_adapter.go
-package infrastructure
+package interfaces
 
 import (
 	"context"
@@ -15,24 +15,24 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// OrderConsumerAdapter 是一个驱动适配器，它监听Kafka消息并驱动应用服务。
-type OrderConsumerAdapter struct {
+// OrderTimeOutConsumerAdapter 是一个驱动适配器，它监听Kafka消息并驱动应用服务。
+type OrderTimeOutConsumerAdapter struct {
 	reader  *kafka.Reader
 	appSvc  *application.OrderApplicationService // <-- 依赖应用服务层的接口
 	wg      sync.WaitGroup
 	stopped bool
 }
 
-// NewOrderConsumerAdapter 创建一个新的Kafka消费者适配器。
-func NewOrderConsumerAdapter(reader *kafka.Reader, appSvc *application.OrderApplicationService) *OrderConsumerAdapter {
-	return &OrderConsumerAdapter{
+// NewOrderTimeOutConsumerAdapter 创建一个新的Kafka消费者适配器。
+func NewOrderTimeOutConsumerAdapter(reader *kafka.Reader, appSvc *application.OrderApplicationService) *OrderTimeOutConsumerAdapter {
+	return &OrderTimeOutConsumerAdapter{
 		reader: reader,
 		appSvc: appSvc,
 	}
 }
 
 // Start 开始监听Kafka主题。这是一个长期运行的方法。
-func (a *OrderConsumerAdapter) Start(ctx context.Context) {
+func (a *OrderTimeOutConsumerAdapter) Start(ctx context.Context) error {
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -63,10 +63,12 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) {
 			}
 		}
 	}()
+
+	return nil
 }
 
 // Stop 优雅地停止消费者。
-func (a *OrderConsumerAdapter) Stop() {
+func (a *OrderTimeOutConsumerAdapter) Stop() {
 	a.stopped = true
 	a.reader.Close()
 	a.wg.Wait()
@@ -74,9 +76,9 @@ func (a *OrderConsumerAdapter) Stop() {
 }
 
 // processMessage 反序列化消息并调用应用服务。
-func (a *OrderConsumerAdapter) processMessage(parentCtx context.Context, msg kafka.Message) {
+func (a *OrderTimeOutConsumerAdapter) processMessage(parentCtx context.Context, msg kafka.Message) {
 	// 解析消息体
-	var event domain.OrderCreationRequested
+	var event domain.OrderTimeoutCheckEvent
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
 		log.Printf("ERROR: Failed to unmarshal event: %v. Message will be skipped.", err)
 		// 在生产环境中，应将消息移至死信队列（DLQ）
@@ -92,8 +94,8 @@ func (a *OrderConsumerAdapter) processMessage(parentCtx context.Context, msg kaf
 	ctx := propagator.Extract(parentCtx, &headerCarrier)
 
 	// 调用应用服务来处理业务逻辑
-	if err := a.appSvc.HandleOrderCreationEvent(ctx, &event); err != nil {
-		log.Printf("ERROR: Failed to handle order creation event for order %s: %v", event.EventID, err)
+	if err := a.appSvc.ProcessTimeoutCheckMessage(ctx, &event); err != nil {
+		log.Printf("ERROR: Failed to handle order creation event for order %s: %v", event.OrderID, err)
 		// 这里可以根据错误类型决定是否重试或发送到死信队列
 	}
 }
