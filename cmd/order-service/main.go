@@ -9,6 +9,7 @@ import (
 	"nexus/internal/pkg/httpclient"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/pkg/nacos"
+	"nexus/internal/pkg/redis"
 	"nexus/internal/service/order/application"
 	"nexus/internal/service/order/infrastructure"
 	"nexus/internal/service/order/infrastructure/adapter"
@@ -39,6 +40,7 @@ type Dependencies struct {
 	TimeoutCheckReader  *kafka.Reader
 	OrderRepo           *infrastructure.MysqlRepository
 	AppService          *application.OrderApplicationService
+	RedisClient         *redis.Client
 }
 
 // assembleDependencies 负责创建所有依赖项
@@ -58,11 +60,13 @@ func assembleDependencies(nacosClient *nacos.Client) (*Dependencies, error) {
 	// 组装 Application Service
 	tracer := otel.Tracer(serviceName)
 	httpClient := httpclient.NewClient(tracer, nacosClient) // Nacos client will be available later if needed
+	redisCilent, _ := redis.NewClient(bootstrap.GetCurrentConfig().Infra.Redis.Addrs)
 	fraudAdapter := adapter.NewFraudHTTPAdapter(httpClient)
 	inventoryAdapter := adapter.NewInventoryHTTPAdapter(httpClient)
 	pricingAdapter := adapter.NewPricingHTTPAdapter(httpClient)
 	schedulerAdapter := adapter.NewSchedulerKafkaAdapter(deps.DelayWriter)
 	notificationAdapter := adapter.NewNotificationKafkaAdapter(deps.NotificationWriter)
+	seckillAdapter, _ := adapter.NewSeckillRedisAdapter(redisCilent)
 
 	deps.AppService = application.NewOrderApplicationService(
 		deps.OrderRepo,
@@ -75,6 +79,7 @@ func assembleDependencies(nacosClient *nacos.Client) (*Dependencies, error) {
 		pricingAdapter,
 		schedulerAdapter,
 		notificationAdapter,
+		seckillAdapter,
 	)
 
 	return deps, nil

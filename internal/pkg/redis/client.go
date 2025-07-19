@@ -69,6 +69,18 @@ func (c *Client) LoadScriptFromFile(scriptName, filePath string) error {
 	return nil
 }
 
+func (c *Client) LoadScriptFromContent(scriptName, content string) error {
+	if _, loaded := c.scripts.Load(scriptName); loaded {
+		return fmt.Errorf("script '%s' is already loaded", scriptName)
+	}
+
+	script := redis.NewScript(content)
+	c.scripts.Store(scriptName, script)
+
+	log.Printf("✅ Lua script '%s' from %s loaded successfully.", scriptName, content)
+	return nil
+}
+
 // ✨ [核心改造] RunScript 执行一个已加载的 Lua 脚本
 // 这是完全通用的方法，它不关心脚本内容和返回值
 func (c *Client) RunScript(ctx context.Context, scriptName string, keys []string, args ...interface{}) (interface{}, error) {

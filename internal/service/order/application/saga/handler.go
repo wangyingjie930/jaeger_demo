@@ -24,6 +24,7 @@ type OrderContext struct {
 	ShippingService  port.ShippingService
 	Scheduler        port.DelayScheduler
 	Notifier         port.NotificationProducer
+	SeckillService   port.SeckillService
 
 	// Saga 补偿逻辑保持不变
 	compensations []func(ctx context.Context)

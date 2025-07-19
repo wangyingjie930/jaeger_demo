@@ -18,6 +18,8 @@ type Order struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
+	SeckillProductID string
+
 	// 价格、折扣等信息也可以是领域的一部分
 	// FinalAmount float64
 }
@@ -29,15 +31,16 @@ func NewOrder(event *OrderCreationRequested) (*Order, error) {
 	}
 
 	return &Order{
-		ID:        event.EventID,
-		UserID:    event.UserID,
-		IsVIP:     event.IsVIP,
-		Items:     event.Items,
-		Quantity:  event.Quantity,
-		PromoID:   event.PromoID,
-		State:     StateCreated, // 初始状态
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:               event.EventID,
+		UserID:           event.UserID,
+		IsVIP:            event.IsVIP,
+		Items:            event.Items,
+		Quantity:         event.Quantity,
+		PromoID:          event.PromoID,
+		State:            StateCreated, // 初始状态
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		SeckillProductID: event.SeckillProductID,
 	}, nil
 }
 

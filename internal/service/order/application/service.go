@@ -29,15 +29,16 @@ type OrderApplicationService struct {
 	shippingService  port.ShippingService
 	scheduler        port.DelayScheduler
 	notifier         port.NotificationProducer
+	seckillService   port.SeckillService
 }
 
-func NewOrderApplicationService(orderRepo domain.OrderRepository, processingTimeout time.Duration, tracer trace.Tracer, createOrderProducer domain.OrderProducer, fraudService port.FraudDetectionService, inventoryService port.InventoryService, pricingService port.PricingService, shippingService port.ShippingService, scheduler port.DelayScheduler, notifier port.NotificationProducer) *OrderApplicationService {
+func NewOrderApplicationService(orderRepo domain.OrderRepository, processingTimeout time.Duration, tracer trace.Tracer, createOrderProducer domain.OrderProducer, fraudService port.FraudDetectionService, inventoryService port.InventoryService, pricingService port.PricingService, shippingService port.ShippingService, scheduler port.DelayScheduler, notifier port.NotificationProducer, seckillService port.SeckillService) *OrderApplicationService {
 	return &OrderApplicationService{
 		orderRepo: orderRepo, processingTimeout: processingTimeout,
 		tracer: tracer, createOrderProducer: createOrderProducer,
 		fraudService: fraudService, inventoryService: inventoryService,
 		pricingService: pricingService, shippingService: shippingService,
-		scheduler: scheduler, notifier: notifier}
+		scheduler: scheduler, notifier: notifier, seckillService: seckillService}
 }
 
 // HandleOrderCreationEvent 是新的、被动的业务处理入口。
@@ -79,6 +80,7 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 		ShippingService:  s.shippingService,
 		Scheduler:        s.scheduler,
 		Notifier:         s.notifier,
+		SeckillService:   s.seckillService,
 	}
 
 	log.Printf("INFO: [Order: %s] Starting verification and reservation process for user %s.", orderEntity.ID, event.UserID)
@@ -198,6 +200,7 @@ func (s *OrderApplicationService) buildChain() saga.Handler {
 	orderProcessingChain.
 		SetNext(new(saga.InventoryHandler)).
 		SetNext(new(saga.PricingHandler)).
+		SetNext(new(saga.SeckillHandler)).
 		SetNext(saga.NewCreateOrderHandler(s.orderRepo)).
 		SetNext(new(saga.NotificationHandler))
 
