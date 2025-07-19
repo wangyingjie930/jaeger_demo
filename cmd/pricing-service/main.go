@@ -31,6 +31,8 @@ var (
 )
 
 func main() {
+	bootstrap.Init()
+
 	bootstrap.StartService(bootstrap.AppInfo{
 		ServiceName: serviceName,
 		Port:        8084,

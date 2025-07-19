@@ -22,6 +22,8 @@ var (
 )
 
 func main() {
+	bootstrap.Init()
+
 	// 配置 zerolog
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zlog.Logger = zlog.With().Str("service", serviceName).Logger()
