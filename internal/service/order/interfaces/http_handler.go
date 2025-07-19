@@ -73,7 +73,7 @@ func (h *OrderHandler) createOrderHandler(w http.ResponseWriter, r *http.Request
 		span.AddEvent("Baggage with promotion_id injected.")
 	}
 
-	resp, err := h.service.CreateOrder(ctx, &application.CreateOrderRequest{
+	resp, err := h.service.RequestOrderCreation(ctx, &application.CreateOrderRequest{
 		UserID:           r.URL.Query().Get("userId"),
 		IsVIP:            isVIP,
 		Items:            strings.Split(r.URL.Query().Get("items"), ","),

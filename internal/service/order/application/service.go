@@ -114,10 +114,10 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	return nil
 }
 
-// CreateOrder 是暴露给接口层（如HTTP Handler）的入口方法
+// RequestOrderCreation 是暴露给接口层（如HTTP Handler）的入口方法
 // 在当前的异步架构中，此方法的主要职责是发送一个创建订单的消息到 Kafka
-func (s *OrderApplicationService) CreateOrder(ctx context.Context, req *CreateOrderRequest) (*CreateOrderResponse, error) {
-	ctx, span := s.tracer.Start(ctx, "app.CreateOrder")
+func (s *OrderApplicationService) RequestOrderCreation(ctx context.Context, req *CreateOrderRequest) (*CreateOrderResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "app.RequestOrderCreation")
 	defer span.End()
 
 	// 1. 生成唯一的事件ID/订单ID
@@ -172,12 +172,9 @@ func (s *OrderApplicationService) ProcessTimeoutCheckMessage(ctx context.Context
 	//    这部分信息只包含 TraceID, SpanID 等，用于关联链路。
 	spanContext := trace.SpanContextFromContext(ctx)
 
-	// 2. 创建一个新的、完全独立的后台上下文。
-	detachedCtx := context.Background()
-
 	// 3. 将之前提取的 Span 上下文信息“注入”到这个新的后台上下文中。
 	//    这样，我们就得到了一个既能关联上级链路，又没有超时限制的新上下文。
-	timeoutTaskCtx := trace.ContextWithRemoteSpanContext(detachedCtx, spanContext)
+	timeoutTaskCtx := trace.ContextWithRemoteSpanContext(context.Background(), spanContext)
 
 	if currentStatus == domain.StatePendingPayment {
 		log.Printf("WARN: [Order: %s] Order has not been paid within the time limit. Cancelling and releasing resources.", event.OrderID)

@@ -17,7 +17,7 @@ func NewCreateOrderHandler(repo domain.OrderRepository) *CreateOrderHandler {
 }
 
 func (h *CreateOrderHandler) Handle(orderCtx *OrderContext) error {
-	ctx, span := orderCtx.Tracer.Start(orderCtx.Ctx, "saga.CreateOrder")
+	ctx, span := orderCtx.Tracer.Start(orderCtx.Ctx, "saga.RequestOrderCreation")
 	defer span.End()
 
 	fmt.Println("【Saga】=> 步骤 4: 创建订单实体并调度支付超时任务...")
