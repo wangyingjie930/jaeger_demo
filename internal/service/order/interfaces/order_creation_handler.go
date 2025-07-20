@@ -4,13 +4,14 @@ package interfaces
 import (
 	"context"
 	"encoding/json"
-	"go.opentelemetry.io/otel"
 	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/application"
 	"nexus/internal/service/order/domain"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -65,13 +66,12 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 			// ✨ 延迟处理逻辑
 			if a.delay > 0 {
 				deliveryTime := msg.Time.Add(a.delay)
-				if time.Now().Before(deliveryTime) {
-					// 消息未到期，不处理，也不提交。
-					// 这里不ack/commit，下次fetch还会取到它。
-					// 为了避免空转，可以适当sleep
-					time.Sleep(1 * time.Second)
-					continue
-				}
+				logger.Ctx(ctx).Info().Any("checkTime", time.Now().Before(deliveryTime)).
+					Any("deliveryTime", deliveryTime.Format(time.DateTime)).
+					Any("now", time.Now().Format(time.DateTime)).
+					Msgf("检查消息!")
+
+				time.Sleep(deliveryTime.Sub(time.Now()))
 			}
 
 			propagator := otel.GetTextMapPropagator()
@@ -105,6 +105,7 @@ func (a *OrderConsumerAdapter) Stop(ctx context.Context) {
 
 // processMessage 反序列化消息并调用应用服务。
 func (a *OrderConsumerAdapter) processMessage(ctx context.Context, msg kafka.Message) error {
+	//return errors.New("connection timeout")
 	// 解析消息体
 	var event domain.OrderCreationRequested
 	if err := json.Unmarshal(msg.Value, &event); err != nil {

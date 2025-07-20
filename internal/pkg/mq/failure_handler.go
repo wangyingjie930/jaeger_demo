@@ -4,16 +4,14 @@ package mq
 import (
 	"context"
 	"fmt"
-	"nexus/internal/pkg/logger"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"nexus/internal/pkg/logger"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 const (
@@ -103,7 +101,7 @@ func (h *FailureHandler) Handle(ctx context.Context, originalMsg kafka.Message, 
 	newMsg := h.prepareMessage(originalMsg, err, retryCount, baseTopic)
 
 	writer := h.getWriter(targetTopic)
-	logger.Ctx(ctx).Info().Any("originalMsg", originalMsg).Any("targetTopic", targetTopic).Msg("failure.Writer")
+	logger.Ctx(ctx).Info().Any("targetTopic", targetTopic).Msg("failure.Writer")
 
 	if writeErr := writer.WriteMessages(ctx, newMsg); writeErr != nil {
 		span.RecordError(writeErr)
@@ -150,7 +148,6 @@ func (h *FailureHandler) prepareMessage(original kafka.Message, err error, retry
 		Key:     original.Key,
 		Value:   original.Value,
 		Headers: newHeaders,
-		Time:    time.Now(), // Update timestamp for retry delay calculation
 	}
 }
 
