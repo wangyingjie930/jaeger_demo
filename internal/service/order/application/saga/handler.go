@@ -30,7 +30,6 @@ type OrderContext struct {
 	compLock      sync.Mutex
 }
 
-// AddCompensation, TriggerCompensation 等方法保持不变...
 func (c *OrderContext) AddCompensation(comp func(ctx context.Context)) {
 	c.compLock.Lock()
 	defer c.compLock.Unlock()

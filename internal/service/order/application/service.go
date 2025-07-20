@@ -95,6 +95,9 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 
 		orderEntity.MarkAsFailed()
 		if updateErr := s.orderRepo.Save(processingCtx, orderEntity); updateErr != nil {
+
+			orderContext.TriggerCompensation(processingCtx)
+
 			logger.Ctx(ctx).Printf("CRITICAL: [Order: %s] Failed to update order status to FAILED after compensation: %v", orderEntity.ID, updateErr)
 			span.RecordError(updateErr, trace.WithAttributes(attribute.Bool("critical.error", true)))
 		}
@@ -147,7 +150,7 @@ func (s *OrderApplicationService) RequestOrderCreation(ctx context.Context, req 
 	}, nil
 }
 
-// 新增: processTimeoutCheckMessage 处理到期的订单检查任务
+// ProcessTimeoutCheckMessage 处理到期的订单检查任务
 func (s *OrderApplicationService) ProcessTimeoutCheckMessage(ctx context.Context, event *domain.OrderTimeoutCheckEvent) error {
 	ctx, span := s.tracer.Start(ctx, "order-service.ProcessTimeoutCheck", trace.WithSpanKind(trace.SpanKindConsumer))
 	defer span.End()

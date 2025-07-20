@@ -41,6 +41,22 @@ type AppConfig struct {
 	FeatureFlags struct {
 		EnableVipPromotion bool `yaml:"enableVipPromotion"`
 	} `yaml:"featureFlags"`
+
+	Resilience ResilienceConfig `yaml:"resilience"`
+}
+
+// ResilienceConfig 结构体
+type ResilienceConfig struct {
+	Consumers map[string]ConsumerResilienceConfig `yaml:"consumers"`
+}
+
+// ConsumerResilienceConfig 结构体
+type ConsumerResilienceConfig struct {
+	Enabled             bool     `yaml:"enabled"`
+	RetryDelays         []int    `yaml:"retryDelays"` // in seconds
+	RetryTopicTemplate  string   `yaml:"retryTopicTemplate"`
+	DltTopicTemplate    string   `yaml:"dltTopicTemplate"`
+	RetryableExceptions []string `yaml:"retryableExceptions"`
 }
 
 // Config 是整个应用唯一的全局配置入口
@@ -64,6 +80,8 @@ var (
 
 // Init 是应用启动的第一步，负责加载所有配置
 func Init() {
+	logger.Init("bootstrap")
+
 	// 1. 获取最基础的引导配置 (Nacos地址)
 	nacosServerAddrs = getEnv("NACOS_SERVER_ADDRS", "localhost:8848")
 	nacosNamespace = getEnv("NACOS_NAMESPACE", "")
@@ -93,7 +111,7 @@ func Init() {
 	// b. 应用业务配置
 	initAndWatchSingleConfig("nexus-app.yaml", nacosGroup, &GlobalConfig.App)
 
-	logger.Logger.Println("✅ Bootstrap Phase 1: All configurations loaded and watched successfully.")
+	logger.Logger.Info().Any("GlobalConfig", GlobalConfig).Msg("✅ Bootstrap Phase 1: All configurations loaded and watched successfully.")
 }
 
 // GetCurrentConfig 返回一个线程安全的配置副本

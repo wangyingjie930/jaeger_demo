@@ -8,3 +8,26 @@ orderService:
 
 featureFlags:
   enableVipPromotion: true
+
+# ======================================================
+# ✨ 新增: Kafka消费者弹性策略配置
+# ======================================================
+resilience:
+  # 针对 order-creation-topic 消费者的配置
+  consumers:
+    orderCreation:
+      # 是否开启重试/DLQ机制
+      enabled: true
+      # 指数退避的延迟时间，单位秒。这里配置了3个重试级别。
+      # 第一次重试延迟5秒，第二次延迟30秒，第三次延迟180秒。
+      retryDelays: [5, 30, 180]
+      # 主题模板，{topic} 会被替换为原始主题名
+      retryTopicTemplate: "{topic}-retry-{delaySec}s"
+      dltTopicTemplate: "{topic}-dlt"
+      # 可重试的异常类型标识符 (在代码中定义)
+      # 这里的字符串需要和代码中 error.Error() 的输出匹配
+      retryableExceptions:
+        - "inventory service unavailable"
+        - "database deadlock"
+        - "connection timeout"
+# ======================================================

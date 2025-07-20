@@ -21,14 +21,22 @@ type OrderConsumerAdapter struct {
 	appSvc  *application.OrderApplicationService // <-- 依赖应用服务层的接口
 	wg      sync.WaitGroup
 	stopped bool
+
+	failureHandler *mq.FailureHandler // ✨ 注入FailureHandler
+	delay          time.Duration      // ✨ 新增延迟字段
 }
 
 // NewOrderConsumerAdapter 创建一个新的Kafka消费者适配器。
-func NewOrderConsumerAdapter(reader *kafka.Reader, appSvc *application.OrderApplicationService) *OrderConsumerAdapter {
+func NewOrderConsumerAdapter(reader *kafka.Reader, appSvc *application.OrderApplicationService, failureHandler *mq.FailureHandler) *OrderConsumerAdapter {
 	return &OrderConsumerAdapter{
-		reader: reader,
-		appSvc: appSvc,
+		reader:         reader,
+		appSvc:         appSvc,
+		failureHandler: failureHandler,
 	}
+}
+
+func (a *OrderConsumerAdapter) SetDelay(d time.Duration) {
+	a.delay = d
 }
 
 // Start 开始监听Kafka主题。这是一个长期运行的方法。
@@ -54,16 +62,33 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 				continue
 			}
 
+			// ✨ 延迟处理逻辑
+			if a.delay > 0 {
+				deliveryTime := msg.Time.Add(a.delay)
+				if time.Now().Before(deliveryTime) {
+					// 消息未到期，不处理，也不提交。
+					// 这里不ack/commit，下次fetch还会取到它。
+					// 为了避免空转，可以适当sleep
+					time.Sleep(1 * time.Second)
+					continue
+				}
+			}
+
 			propagator := otel.GetTextMapPropagator()
 			headerCarrier := mq.KafkaHeaderCarrier(msg.Headers)
 			newCtx := propagator.Extract(ctx, &headerCarrier)
 
-			// 将具体的消息处理逻辑委托给一个私有方法
-			a.processMessage(newCtx, msg)
+			// ✨ 将处理逻辑移入一个带错误返回的函数
+			processingErr := a.processMessage(newCtx, msg)
 
-			// 消息处理完成后提交Offset
+			if processingErr != nil {
+				// ✨ 如果处理失败，调用FailureHandler
+				a.failureHandler.Handle(newCtx, msg, processingErr)
+			}
+
+			// ✨ 无论成功或失败（已移交），都提交Offset
 			if err := a.reader.CommitMessages(ctx, msg); err != nil {
-				logger.Ctx(ctx).Printf("ERROR: failed to commit messages: %v", err)
+				logger.Ctx(ctx).Error().Err(err).Msg("Failed to commit messages")
 			}
 		}
 	}()
@@ -79,22 +104,13 @@ func (a *OrderConsumerAdapter) Stop(ctx context.Context) {
 }
 
 // processMessage 反序列化消息并调用应用服务。
-func (a *OrderConsumerAdapter) processMessage(ctx context.Context, msg kafka.Message) {
+func (a *OrderConsumerAdapter) processMessage(ctx context.Context, msg kafka.Message) error {
 	// 解析消息体
 	var event domain.OrderCreationRequested
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
-		logger.Ctx(ctx).Printf("ERROR: Failed to unmarshal event: %v. Message will be skipped.", err)
-		// 在生产环境中，应将消息移至死信队列（DLQ）
-		return
+		return err
 	}
-
-	// 注意：这里的追踪上下文重建和超时控制逻辑也应该由适配器负责
-	// 然后将最终的上下文传递给应用服务。
-	// 为简化示例，我们直接调用应用服务的方法。
 
 	// 调用应用服务来处理业务逻辑
-	if err := a.appSvc.HandleOrderCreationEvent(ctx, &event); err != nil {
-		logger.Ctx(ctx).Printf("ERROR: Failed to handle order creation event for order %s: %v", event.EventID, err)
-		// 这里可以根据错误类型决定是否重试或发送到死信队列
-	}
+	return a.appSvc.HandleOrderCreationEvent(ctx, &event)
 }

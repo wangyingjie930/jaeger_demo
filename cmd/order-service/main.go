@@ -14,6 +14,7 @@ import (
 	"nexus/internal/service/order/infrastructure"
 	"nexus/internal/service/order/infrastructure/adapter"
 	"nexus/internal/service/order/interfaces"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,11 +42,16 @@ type Dependencies struct {
 	OrderRepo           *infrastructure.MysqlRepository
 	AppService          *application.OrderApplicationService
 	RedisClient         *redis.Client
+
+	FailureHandler *mq.FailureHandler
 }
 
 // assembleDependencies 负责创建所有依赖项
 func assembleDependencies(nacosClient *nacos.Client) (*Dependencies, error) {
 	brokers := strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ",")
+
+	// 组装 Application Service
+	tracer := otel.Tracer(serviceName)
 
 	// 所有依赖都在这里统一创建
 	deps := &Dependencies{
@@ -55,10 +61,15 @@ func assembleDependencies(nacosClient *nacos.Client) (*Dependencies, error) {
 		OrderCreationReader: mq.NewKafkaReader(brokers, orderCreationTopic, orderCreationConsumerGroupID),
 		TimeoutCheckReader:  mq.NewKafkaReader(brokers, orderTimeoutCheckTopic, timeoutCheckConsumerGroupID),
 		OrderRepo:           infrastructure.NewMysqlRepository(),
+		FailureHandler: mq.NewFailureHandler(brokers, mq.ResilienceConfig{
+			Enabled:             bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"].Enabled,
+			RetryDelays:         bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"].RetryDelays,
+			RetryTopicTemplate:  bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"].RetryTopicTemplate,
+			DltTopicTemplate:    bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"].DltTopicTemplate,
+			RetryableExceptions: bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"].RetryableExceptions,
+		}, tracer),
 	}
 
-	// 组装 Application Service
-	tracer := otel.Tracer(serviceName)
 	httpClient := httpclient.NewClient(tracer, nacosClient) // Nacos client will be available later if needed
 	redisCilent, _ := redis.NewClient(bootstrap.GetCurrentConfig().Infra.Redis.Addrs)
 	fraudAdapter := adapter.NewFraudHTTPAdapter(httpClient)
@@ -94,7 +105,7 @@ func registerService(app *bootstrap.Application, deps *Dependencies) error {
 	app.AddServer(mux, 8081)
 
 	// 2. 注册 Kafka 消费者作为后台任务
-	orderConsumer := interfaces.NewOrderConsumerAdapter(deps.OrderCreationReader, deps.AppService)
+	orderConsumer := interfaces.NewOrderConsumerAdapter(deps.OrderCreationReader, deps.AppService, deps.FailureHandler)
 	app.AddTask(orderConsumer.Start, func(ctx context.Context) error {
 		orderConsumer.Stop(ctx)
 		return nil
@@ -115,7 +126,49 @@ func registerService(app *bootstrap.Application, deps *Dependencies) error {
 		return nil
 	})
 
+	registerRetryAndDltConsumers(app, deps)
+
 	return nil
+}
+
+// ✨ 新建函数：注册所有重试和DLT消费者
+func registerRetryAndDltConsumers(app *bootstrap.Application, deps *Dependencies) {
+	consumerConfig := bootstrap.GetCurrentConfig().App.Resilience.Consumers["orderCreation"]
+	if !consumerConfig.Enabled {
+		return
+	}
+	brokers := strings.Split(bootstrap.GetCurrentConfig().Infra.Kafka.Brokers, ",")
+
+	// 注册重试Topic的消费者
+	for _, delay := range consumerConfig.RetryDelays {
+		retryTopic := strings.NewReplacer(
+			"{topic}", orderCreationTopic,
+			"{delaySec}", strconv.Itoa(delay),
+		).Replace(consumerConfig.RetryTopicTemplate)
+
+		retryReader := mq.NewKafkaReader(brokers, retryTopic, orderCreationConsumerGroupID+"-retry")
+		// 重试消费者也需要注入 FailureHandler，以便在失败时能进入下一个重试环节或DLT
+		retryConsumer := interfaces.NewOrderConsumerAdapter(retryReader, deps.AppService, deps.FailureHandler)
+		// ✨ 为重试消费者添加延迟逻辑
+		retryConsumer.SetDelay(time.Duration(delay) * time.Second)
+
+		app.AddTask(retryConsumer.Start, func(ctx context.Context) error {
+			retryConsumer.Stop(ctx)
+			return nil
+		})
+	}
+
+	// 注册DLT消费者
+	dltTopic := strings.NewReplacer("{topic}", orderCreationTopic).Replace(consumerConfig.DltTopicTemplate)
+	dltReader := mq.NewKafkaReader(brokers, dltTopic, orderCreationConsumerGroupID+"-dlt")
+	dltConsumer := interfaces.NewDltConsumerAdapter(dltReader) // 使用新的DLT专用消费者
+
+	app.AddTask(dltConsumer.Start, func(ctx context.Context) error {
+		dltConsumer.Stop(ctx)
+		return nil
+	})
+
+	logger.Logger.Info().Msg("✅ Retry and DLT consumers registered.")
 }
 
 func main() {

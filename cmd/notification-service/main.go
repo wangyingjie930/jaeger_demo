@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/pkg/tracing"
@@ -55,7 +54,7 @@ func main() {
 
 	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
 	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
+		logger.Logger.Fatal().Err(err).Msg("failed to initialize tracer provider")
 	}
 	defer tp.Shutdown(context.Background())
 
