@@ -2,7 +2,6 @@ package saga
 
 import (
 	"go.opentelemetry.io/otel/attribute"
-	"log"
 	"nexus/internal/pkg/logger"
 )
 
@@ -30,7 +29,7 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 	// 我们只记录一个警告，然后让整个Saga流程成功结束。
 	// 后续可以通过监控告警和后台任务来进行补偿。
 	if err != nil {
-		log.Printf("WARN: [Order: %s] Failed to publish notification event: %v. This is a non-critical error.", orderCtx.Order.ID, err)
+		logger.Ctx(ctx).Error().Err(err).Str("order", orderCtx.Order.ID).Msg("WARN:Failed to publish notification")
 		span.RecordError(err) // 在 tracing 中依然要记录这个非致命错误，以便排查
 	}
 

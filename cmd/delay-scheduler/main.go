@@ -3,7 +3,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/pkg/tracing"
 	"os"
@@ -58,7 +58,7 @@ func NewScheduler(level string, delay time.Duration) *Scheduler {
 
 // StartPolling 启动定时轮询器
 func (s *Scheduler) StartPolling(ctx context.Context, interval time.Duration) {
-	log.Printf("✅ Polling scheduler for level '%s' started, checking every %v", s.level, interval)
+	logger.Ctx(ctx).Printf("✅ Polling scheduler for level '%s' started, checking every %v", s.level, interval)
 	// 每个延迟等级一个独立的 ticker
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -70,7 +70,7 @@ func (s *Scheduler) StartPolling(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			s.checkAndPublish(ctx)
 		case <-ctx.Done():
-			log.Printf("🛑 Shutting down polling for level '%s'", s.level)
+			logger.Ctx(ctx).Printf("🛑 Shutting down polling for level '%s'", s.level)
 			return
 		}
 	}
@@ -110,14 +110,14 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 		// 3. 判断是否到期
 		if now.After(deliveryTime) {
 			// 消息到期，进行投递
-			log.Printf("INFO: Message in '%s' is due. DeliveryTime: %v, Now: %v. Publishing...", s.level, deliveryTime, time.Now())
+			logger.Ctx(ctx).Printf("INFO: Message in '%s' is due. DeliveryTime: %v, Now: %v. Publishing...", s.level, deliveryTime, time.Now())
 
 			realTopic := s.getHeader(msg.Headers, "real-topic")
 			if realTopic == "" {
-				log.Printf("ERROR: 'real-topic' header missing in message from '%s'. Skipping.", s.level)
+				logger.Ctx(ctx).Printf("ERROR: 'real-topic' header missing in message from '%s'. Skipping.", s.level)
 				// 这种错误消息也需要提交，否则会一直被重复消费
 				if err := s.kafkaReader.CommitMessages(ctx, msg); err != nil {
-					log.Printf("ERROR: Failed to commit message after skipping: %v", err)
+					logger.Ctx(ctx).Printf("ERROR: Failed to commit message after skipping: %v", err)
 				}
 				span.End()
 				continue // 处理下一条消息
@@ -125,7 +125,7 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 
 			// 投递到真实 Topic
 			if err := s.publish(ctx, realTopic, msg); err != nil {
-				log.Printf("ERROR: Failed to publish message to real topic '%s': %v", realTopic, err)
+				logger.Ctx(ctx).Error().Err(err).Str("topic", realTopic).Msg("ERROR: Failed to publish message to real topic")
 				// 投递失败，不能提交 offset，等待下次轮询重试
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "Failed to publish to real topic")
@@ -135,18 +135,18 @@ func (s *Scheduler) checkAndPublish(parentCtx context.Context) {
 
 			// 投递成功，提交 offset
 			if err := s.kafkaReader.CommitMessages(ctx, msg); err != nil {
-				log.Printf("ERROR: Failed to commit message for '%s' after successful publish: %v", s.level, err)
+				logger.Ctx(ctx).Error().Err(err).Str("level", s.level).Msg("ERROR: Failed to commit message")
 				span.RecordError(err)
 				span.End()
 				// 即使提交失败，也退出循环，避免消息重复投递。Kafka consumer group 会处理好 offset
 				break
 			}
-			log.Printf("SUCCESS: Message from '%s' published to '%s' and committed.", s.level, realTopic)
+			logger.Ctx(ctx).Printf("SUCCESS: Message from '%s' published to '%s' and committed.", s.level, realTopic)
 			span.AddEvent("MessagePublishedAndCommitted", trace.WithAttributes(attribute.String("real.topic", realTopic)))
 			span.End()
 		} else {
 			// 队头消息未到期，无需再检查后续消息
-			// log.Printf("DEBUG: Head message in '%s' not yet due (DeliveryTime: %v). Waiting for next tick.", s.level, deliveryTime)
+			// logger.Ctx(ctx).Printf("DEBUG: Head message in '%s' not yet due (DeliveryTime: %v). Waiting for next tick.", s.level, deliveryTime)
 			span.AddEvent("HeadMessageNotDue")
 			span.End()
 			break // 退出 for 循环
@@ -181,7 +181,7 @@ func (s *Scheduler) closeWriters() {
 	defer s.writerLock.Unlock()
 	for topic, writer := range s.kafkaWriters {
 		if err := writer.Close(); err != nil {
-			log.Printf("ERROR: Failed to close writer for topic %s: %v", topic, err)
+			logger.Logger.Fatal().Err(err).Str("topic", topic).Msg("ERROR: Failed to close writer")
 		}
 	}
 }
@@ -196,9 +196,11 @@ func (s *Scheduler) getHeader(headers []kafka.Header, key string) string {
 }
 
 func main() {
+	logger.Init(serviceName)
+
 	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
 	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
+		logger.Logger.Fatal().Err(err).Msg("failed to initialize tracer provider")
 	}
 	defer tp.Shutdown(context.Background())
 
@@ -218,7 +220,7 @@ func main() {
 		}()
 	}
 
-	log.Println("All polling schedulers are running.")
+	logger.Logger.Println("All polling schedulers are running.")
 	wg.Wait()
 }
 

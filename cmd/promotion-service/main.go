@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"nexus/internal/pkg/bootstrap"
 	"nexus/internal/pkg/logger"
 	"nexus/internal/service/promotion/application"
@@ -31,14 +30,14 @@ func main() {
 			dsn := bootstrap.GetCurrentConfig().Infra.Mysql.Addrs // 应从配置获取
 			db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 			if err != nil {
-				log.Fatalf("failed to connect to database with gorm: %v", err)
+				logger.Logger.Error().Err(err).Msgf("failed to connect to database with gorm: %v", err)
 			}
 
 			// 2. **自动迁移 (基础设施)**
 			// 使用在 infrastructure 包中定义的 GORM 模型
 			err = db.AutoMigrate(&infrastructure.CouponTemplateModel{}, &infrastructure.UserCouponModel{})
 			if err != nil {
-				log.Printf("WARN: failed to auto migrate gorm models: %v", err)
+				logger.Logger.Error().Err(err).Msgf("WARN: failed to auto migrate gorm models: %v", err)
 			}
 
 			// 3. **创建仓储实例 (基础设施)**

@@ -3,7 +3,7 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/domain"
 
@@ -21,13 +21,13 @@ func NewOrderProducerAdapter(writer *kafka.Writer) *OrderProducerAdapter {
 func (p *OrderProducerAdapter) Product(ctx context.Context, event *domain.OrderCreationRequested) error {
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("ERROR: Failed to marshal order creation event: %v", err)
+		logger.Ctx(ctx).Printf("ERROR: Failed to marshal order creation event: %v", err)
 		return err
 	}
 
 	err = mq.ProduceMessage(ctx, p.writer, []byte(event.UserID), eventBytes)
 	if err != nil {
-		log.Printf("ERROR: Failed to produce message to Kafka: %v", err)
+		logger.Ctx(ctx).Printf("ERROR: Failed to produce message to Kafka: %v", err)
 		return err
 	}
 	return nil

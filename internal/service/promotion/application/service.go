@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
-	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/promotion/domain"
 	"time"
 )
@@ -39,7 +39,7 @@ func (s *PromotionService) GetPromoPrice(ctx context.Context, isVip bool, userID
 		attribute.String("user.id", userID),
 	)
 
-	log.Printf("Calculating promo price for promotion '%s'", promoID)
+	logger.Ctx(ctx).Printf("Calculating promo price for promotion '%s'", promoID)
 
 	if promoID == "" {
 		return nil, fmt.Errorf("promotion_id is missing from baggage")
@@ -93,7 +93,7 @@ func (s *PromotionService) UseCoupon(ctx context.Context, req *UseCouponRequest)
 		return nil, fmt.Errorf("failed to save coupon status: %w", err)
 	}
 
-	log.Printf("Coupon %s for order %s has been used (frozen).", req.CouponCode, req.OrderID)
+	logger.Ctx(ctx).Printf("Coupon %s for order %s has been used (frozen).", req.CouponCode, req.OrderID)
 
 	resp := &UseCouponResponse{
 		Success:        true,
@@ -139,7 +139,7 @@ func (s *PromotionService) CancelCouponUsage(ctx context.Context, req *UseCoupon
 		return fmt.Errorf("failed to save coupon status during compensation: %w", err)
 	}
 
-	log.Printf("Compensation: Coupon %s for order %s has been rolled back to UNUSED.", req.CouponCode, req.OrderID)
+	logger.Ctx(ctx).Printf("Compensation: Coupon %s for order %s has been rolled back to UNUSED.", req.CouponCode, req.OrderID)
 	span.AddEvent("Coupon status rolled back to UNUSED")
 
 	return nil

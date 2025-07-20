@@ -2,7 +2,7 @@
 package zookeeper
 
 import (
-	"log"
+	"nexus/internal/pkg/logger"
 	"time"
 
 	"github.com/go-zookeeper/zk"
@@ -29,7 +29,7 @@ func InitZookeeper(servers []string) (*Conn, error) {
 	// 事件通道用于接收连接状态的变化通知
 	c, eventChan, err := zk.Connect(zkServers, connTimeout)
 	if err != nil {
-		log.Printf("ERROR: Failed to connect to ZooKeeper: %v", err)
+		logger.Logger.Fatal().Err(err).Msg("ERROR: Failed to connect to ZooKeeper")
 		return nil, err
 	}
 
@@ -40,12 +40,12 @@ func InitZookeeper(servers []string) (*Conn, error) {
 			if event.Type == zk.EventSession {
 				switch event.State {
 				case zk.StateConnected:
-					log.Println("Successfully connected to ZooKeeper.")
+					logger.Logger.Println("Successfully connected to ZooKeeper.")
 				case zk.StateDisconnected:
-					log.Println("Disconnected from ZooKeeper.")
+					logger.Logger.Println("Disconnected from ZooKeeper.")
 				case zk.StateExpired:
 					// 会话过期通常意味着需要重新建立所有临时节点和Watcher
-					log.Println("ZooKeeper session expired.")
+					logger.Logger.Println("ZooKeeper session expired.")
 				}
 			}
 		}
