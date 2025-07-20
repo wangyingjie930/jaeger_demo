@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/domain/port"
 )
 
@@ -27,7 +28,7 @@ func (h *SeckillHandler) Handle(orderCtx *OrderContext) error {
 		attribute.String("user.id", orderCtx.Order.UserID),
 	)
 
-	fmt.Println("【Saga】=> 步骤 0.5: 秒杀资格校验...")
+	logger.Ctx(ctx).Println("【Saga】=> 步骤 0.5: 秒杀资格校验...")
 
 	// 调用抽象接口，而不是具体实现
 	result, err := orderCtx.SeckillService.AttemptSeckill(ctx, productID, orderCtx.Order.UserID)

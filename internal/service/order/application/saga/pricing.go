@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
+	"nexus/internal/pkg/logger"
 	"sync"
 )
 
@@ -18,7 +19,7 @@ func (h *PricingHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.Tracer.Start(orderCtx.Ctx, "saga.Pricing")
 	defer span.End()
 
-	fmt.Println("【Saga】=> 步骤 3: 动态定价与运费计算...")
+	logger.Ctx(ctx).Println("【Saga】=> 步骤 3: 动态定价与运费计算...")
 
 	// 从 OpenTelemetry Baggage 中提取促销ID
 	b := baggage.FromContext(ctx)

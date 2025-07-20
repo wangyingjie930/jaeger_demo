@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"go.opentelemetry.io/otel"
 	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/application"
 	"nexus/internal/service/order/domain"
@@ -36,7 +37,7 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		log.Printf("✅ Kafka Consumer Adapter started for topic '%s'.", a.reader.Config().Topic)
+		logger.Ctx(ctx).Printf("✅ Kafka Consumer Adapter started for topic '%s'.", a.reader.Config().Topic)
 		for {
 			if a.stopped {
 				return
@@ -49,17 +50,21 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 					log.Println("🛑 Kafka Consumer Adapter shutting down.")
 					return
 				}
-				log.Printf("ERROR: could not read message: %v. Retrying...", err)
+				logger.Ctx(ctx).Printf("ERROR: could not read message: %v. Retrying...", err)
 				time.Sleep(1 * time.Second) // 避免快速失败循环
 				continue
 			}
 
+			propagator := otel.GetTextMapPropagator()
+			headerCarrier := mq.KafkaHeaderCarrier(msg.Headers)
+			newCtx := propagator.Extract(ctx, &headerCarrier)
+
 			// 将具体的消息处理逻辑委托给一个私有方法
-			a.processMessage(ctx, msg)
+			a.processMessage(newCtx, msg)
 
 			// 消息处理完成后提交Offset
 			if err := a.reader.CommitMessages(ctx, msg); err != nil {
-				log.Printf("ERROR: failed to commit messages: %v", err)
+				logger.Ctx(ctx).Printf("ERROR: failed to commit messages: %v", err)
 			}
 		}
 	}()
@@ -67,19 +72,19 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 }
 
 // Stop 优雅地停止消费者。
-func (a *OrderConsumerAdapter) Stop() {
+func (a *OrderConsumerAdapter) Stop(ctx context.Context) {
 	a.stopped = true
 	a.reader.Close()
 	a.wg.Wait()
-	log.Printf("✅ Kafka Consumer Adapter stopped.")
+	logger.Ctx(ctx).Printf("✅ Kafka Consumer Adapter stopped.")
 }
 
 // processMessage 反序列化消息并调用应用服务。
-func (a *OrderConsumerAdapter) processMessage(parentCtx context.Context, msg kafka.Message) {
+func (a *OrderConsumerAdapter) processMessage(ctx context.Context, msg kafka.Message) {
 	// 解析消息体
 	var event domain.OrderCreationRequested
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
-		log.Printf("ERROR: Failed to unmarshal event: %v. Message will be skipped.", err)
+		logger.Ctx(ctx).Printf("ERROR: Failed to unmarshal event: %v. Message will be skipped.", err)
 		// 在生产环境中，应将消息移至死信队列（DLQ）
 		return
 	}
@@ -88,13 +93,9 @@ func (a *OrderConsumerAdapter) processMessage(parentCtx context.Context, msg kaf
 	// 然后将最终的上下文传递给应用服务。
 	// 为简化示例，我们直接调用应用服务的方法。
 
-	propagator := otel.GetTextMapPropagator()
-	headerCarrier := mq.KafkaHeaderCarrier(msg.Headers)
-	ctx := propagator.Extract(parentCtx, &headerCarrier)
-
 	// 调用应用服务来处理业务逻辑
 	if err := a.appSvc.HandleOrderCreationEvent(ctx, &event); err != nil {
-		log.Printf("ERROR: Failed to handle order creation event for order %s: %v", event.EventID, err)
+		logger.Ctx(ctx).Printf("ERROR: Failed to handle order creation event for order %s: %v", event.EventID, err)
 		// 这里可以根据错误类型决定是否重试或发送到死信队列
 	}
 }

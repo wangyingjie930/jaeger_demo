@@ -1,9 +1,9 @@
 package saga
 
 import (
-	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"log"
+	"nexus/internal/pkg/logger"
 )
 
 // NotificationHandler 是 Saga 流程的最后一步，负责发送最终通知。
@@ -20,7 +20,7 @@ func (h *NotificationHandler) Handle(orderCtx *OrderContext) error {
 		attribute.String("messaging.destination.topic", "notifications"),
 	)
 
-	fmt.Println("【Saga】=> 步骤 Final: 发送订单创建成功通知...")
+	logger.Ctx(ctx).Println("【Saga】=> 步骤 Final: 发送订单创建成功通知...")
 
 	// 【核心改造】: 调用抽象的通知服务端口
 	err := orderCtx.Notifier.SendOrderCreated(ctx, orderCtx.Order)

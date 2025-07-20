@@ -3,11 +3,10 @@ package saga
 import (
 	"context"
 	"go.opentelemetry.io/otel/trace"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/domain"
 	"nexus/internal/service/order/domain/port"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 // OrderContext 在 Saga 流程中传递上下文数据。
@@ -41,7 +40,7 @@ func (c *OrderContext) AddCompensation(comp func(ctx context.Context)) {
 func (c *OrderContext) TriggerCompensation(ctx context.Context) {
 	c.compLock.Lock()
 	defer c.compLock.Unlock()
-	log.Printf("INFO: [Order: %s] Executing %d compensation functions.", c.Order.ID, len(c.compensations))
+	logger.Ctx(ctx).Printf("INFO: [Order: %s] Executing %d compensation functions.", c.Order.ID, len(c.compensations))
 	for _, comp := range c.compensations {
 		comp(ctx)
 	}

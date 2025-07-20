@@ -2,6 +2,7 @@ package saga
 
 import (
 	"fmt"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/domain"
 	"time"
 )
@@ -20,7 +21,7 @@ func (h *CreateOrderHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.Tracer.Start(orderCtx.Ctx, "saga.RequestOrderCreation")
 	defer span.End()
 
-	fmt.Println("【Saga】=> 步骤 4: 创建订单实体并调度支付超时任务...")
+	logger.Ctx(ctx).Printf("【Saga】=> 步骤 4: 创建订单实体并调度支付超时任务...")
 
 	// 1. 将订单状态更新为待支付并持久化
 	orderCtx.Order.MarkAsPendingPayment()

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"nexus/internal/pkg/bootstrap"
 	"nexus/internal/pkg/httpclient"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/pkg/nacos"
 	"nexus/internal/pkg/redis"
@@ -96,13 +97,13 @@ func registerService(app *bootstrap.Application, deps *Dependencies) error {
 	// 2. 注册 Kafka 消费者作为后台任务
 	orderConsumer := interfaces.NewOrderConsumerAdapter(deps.OrderCreationReader, deps.AppService)
 	app.AddTask(orderConsumer.Start, func(ctx context.Context) error {
-		orderConsumer.Stop()
+		orderConsumer.Stop(ctx)
 		return nil
 	})
 
 	timeoutConsumer := interfaces.NewOrderTimeOutConsumerAdapter(deps.TimeoutCheckReader, deps.AppService)
 	app.AddTask(timeoutConsumer.Start, func(ctx context.Context) error {
-		timeoutConsumer.Stop()
+		timeoutConsumer.Stop(ctx)
 		return nil
 	})
 
@@ -132,13 +133,14 @@ func main() {
 		},
 	}
 
+	ctx := context.Background()
 	// 创建并运行应用
 	app, err := bootstrap.NewApplication(appInfo)
 	if err != nil {
-		log.Fatalf("❌ Failed to create application: %v", err)
+		logger.Ctx(ctx).Fatal().Msgf("❌ Failed to create application: %v", err)
 	}
 
 	if err := app.Run(); err != nil {
-		log.Fatalf("❌ Application run failed: %v", err)
+		logger.Ctx(ctx).Fatal().Msgf("❌ Application run failed: %v", err)
 	}
 }

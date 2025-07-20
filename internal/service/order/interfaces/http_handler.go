@@ -7,9 +7,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
-	"log"
 	"net/http"
 	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/application"
 	"strconv"
 	"strings"
@@ -63,7 +63,7 @@ func (h *OrderHandler) createOrderHandler(w http.ResponseWriter, r *http.Request
 	var promoId string
 	if isVIP && bootstrap.GetCurrentConfig().App.FeatureFlags.EnableVipPromotion {
 		promoId = "VIP_SUMMER_SALE"
-		log.Println("VIP user detected, activating promotion baggage.")
+		logger.Ctx(ctx).Info().Msg("VIP user detected, activating promotion baggage.")
 		promoBaggage, _ := baggage.NewMember("promotion_id", promoId)
 		b, _ := baggage.FromContext(ctx).SetMember(promoBaggage)
 		ctx = baggage.ContextWithBaggage(ctx, b)

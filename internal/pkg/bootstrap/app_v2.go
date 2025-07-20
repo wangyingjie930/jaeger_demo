@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/nacos"
 	"nexus/internal/pkg/tracing"
 	"nexus/internal/pkg/utils"
@@ -59,6 +60,9 @@ type Application struct {
 func NewApplication[T any](info AppInfoV2[T]) (*Application, error) {
 	// 1. 初始化最底层的配置，并获取 Nacos Config Client
 	Init()
+
+	// 1.1 初始化日志
+	logger.Init(info.ServiceName)
 
 	// 2. 初始化 Tracer Provider
 	tp, err := tracing.InitTracerProvider(info.ServiceName, GetCurrentConfig().Infra.Jaeger.Endpoint)
@@ -122,15 +126,15 @@ func (app *Application) AddServer(mux *http.ServeMux, port int) error {
 	}
 
 	// 启动 HTTP 服务器前，先向 Nacos 注册
-	log.Printf("Registering service '%s' to Nacos...", serviceName)
+	logger.Logger.Printf("Registering service '%s' to Nacos...", serviceName)
 	if err := app.nacosNaming.RegisterServiceInstance(serviceName, ip, port); err != nil {
 		return fmt.Errorf("failed to register '%s' with nacos: %w", serviceName, err)
 	}
-	log.Printf("✅ Service '%s' registered to Nacos successfully (%s:%d)", serviceName, ip, port)
+	logger.Logger.Printf("✅ Service '%s' registered to Nacos successfully (%s:%d)", serviceName, ip, port)
 
 	// 将 HTTP 服务器的启动和关闭纳入 errgroup 的管理
 	app.g.Go(func() error {
-		log.Printf("✅ HTTP server for '%s' listening on :%d", serviceName, port)
+		logger.Logger.Printf("✅ HTTP server for '%s' listening on :%d", serviceName, port)
 		if err := app.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("http server error for '%s': %w", serviceName, err)
 		}
@@ -139,7 +143,7 @@ func (app *Application) AddServer(mux *http.ServeMux, port int) error {
 
 	app.g.Go(func() error {
 		<-app.shutdownCtx.Done() // 等待关停信号
-		log.Printf("Shutting down HTTP server for '%s'...", serviceName)
+		logger.Logger.Printf("Shutting down HTTP server for '%s'...", serviceName)
 
 		// 创建一个有超时的上下文用于关停
 		shutdownTimeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -147,10 +151,10 @@ func (app *Application) AddServer(mux *http.ServeMux, port int) error {
 
 		// 先从 Nacos 注销
 		if err := app.nacosNaming.DeregisterServiceInstance(serviceName, ip, port); err != nil {
-			log.Printf("❌ Error deregistering '%s' from Nacos: %v", serviceName, err)
+			logger.Logger.Fatal().Msgf("❌ Error deregistering '%s' from Nacos: %v", serviceName, err)
 			// 即使注销失败，也要继续关闭服务器，但记录错误
 		} else {
-			log.Printf("✅ Service '%s' deregistered from Nacos.", serviceName)
+			logger.Logger.Printf("✅ Service '%s' deregistered from Nacos.", serviceName)
 		}
 
 		// 再关闭 HTTP 服务器
@@ -173,7 +177,7 @@ func (app *Application) AddTask(start func(ctx context.Context) error, stop func
 	if stop != nil {
 		app.g.Go(func() error {
 			<-app.shutdownCtx.Done() // 等待关停信号
-			log.Println("Stopping background task...")
+			logger.Logger.Println("Stopping background task...")
 			// 为关停操作也设置一个超时
 			timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -212,21 +216,21 @@ func (app *Application) Run() error {
 		case <-app.shutdownCtx.Done():
 			return nil // 由其他任务触发的关停
 		case sig := <-quit:
-			log.Printf("Received signal '%v', initiating graceful shutdown...", sig)
+			logger.Logger.Printf("Received signal '%v', initiating graceful shutdown...", sig)
 			app.shutdownCancel() // 触发所有任务的关停
 		}
 		return nil
 	})
 
 	serviceName := app.serviceName
-	log.Printf("🚀 Application '%s' started. Waiting for tasks to complete or shutdown signal...", serviceName)
+	logger.Logger.Printf("🚀 Application '%s' started. Waiting for tasks to complete or shutdown signal...", serviceName)
 
 	// 等待所有由 errgroup 管理的 goroutine 完成
 	if err := app.g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		log.Printf("❌ Application run failed with error: %v", err)
+		logger.Logger.Error().Msgf("❌ Application run failed with error: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Application '%s' gracefully shut down.", app.serviceName)
+	logger.Logger.Printf("✅ Application '%s' gracefully shut down.", app.serviceName)
 	return nil
 }

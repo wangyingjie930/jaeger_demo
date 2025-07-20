@@ -3,7 +3,7 @@ package mq
 
 import (
 	"context"
-	"log"
+	"nexus/internal/pkg/logger"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -97,7 +97,7 @@ func ProduceMessage(ctx context.Context, writer *kafka.Writer, key, value []byte
 	// 从当前上下文中注入追踪信息到消息头
 	InjectTraceContext(ctx, &msg.Headers)
 
-	log.Printf("Producing message to Kafka topic '%s', Trace context injected.", writer.Topic)
+	logger.Ctx(ctx).Printf("Producing message to Kafka topic '%s', Trace context injected.", writer.Topic)
 
 	return writer.WriteMessages(ctx, msg)
 }

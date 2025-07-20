@@ -7,7 +7,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"log"
+	"nexus/internal/pkg/logger"
 )
 
 // Client 封装了 Nacos 命名客户端
@@ -23,7 +23,7 @@ type Client struct {
 func NewNacosClientWithConfigs(serverConfigs []constant.ServerConfig, clientConfig *constant.ClientConfig, groupName string) (*Client, error) {
 	if groupName == "" {
 		groupName = "DEFAULT_GROUP"
-		log.Printf("⚠️ WARNING: NACOS_GROUP is not set. Using '%s'.", groupName)
+		logger.Logger.Printf("⚠️ WARNING: NACOS_GROUP is not set. Using '%s'.", groupName)
 	}
 
 	namingClient, err := clients.NewNamingClient(
@@ -37,7 +37,7 @@ func NewNacosClientWithConfigs(serverConfigs []constant.ServerConfig, clientConf
 	}
 
 	namespaceId := clientConfig.NamespaceId
-	log.Printf("✅ Successfully connected to Nacos. Namespace: '%s', Group: '%s'", namespaceId, groupName)
+	logger.Logger.Printf("✅ Successfully connected to Nacos. Namespace: '%s', Group: '%s'", namespaceId, groupName)
 	return &Client{
 		namingClient: namingClient,
 		namespaceId:  namespaceId,
@@ -63,7 +63,7 @@ func (c *Client) RegisterServiceInstance(serviceName, ip string, port int) error
 	if !success {
 		return fmt.Errorf("nacos registration was not successful for service: %s", serviceName)
 	}
-	log.Printf("✅ Service '%s' registered to Nacos successfully (%s:%d)", serviceName, ip, port)
+	logger.Logger.Printf("✅ Service '%s' registered to Nacos successfully (%s:%d)", serviceName, ip, port)
 	return nil
 }
 
@@ -79,7 +79,7 @@ func (c *Client) DeregisterServiceInstance(serviceName, ip string, port int) err
 	if err != nil {
 		return fmt.Errorf("failed to deregister service with nacos: %w", err)
 	}
-	log.Printf("ℹ️ Service '%s' deregistered from Nacos (%s:%d)", serviceName, ip, port)
+	logger.Logger.Printf("ℹ️ Service '%s' deregistered from Nacos (%s:%d)", serviceName, ip, port)
 	return nil
 }
 
@@ -104,6 +104,6 @@ func (c *Client) Close() {
 	if c.namingClient != nil {
 		// Nacos Go SDK v2.x.x 没有显式的 Close 方法
 		// 临时节点会在心跳停止后自动过期
-		log.Println("ℹ️ Nacos client does not require explicit closing. Ephemeral nodes will expire.")
+		logger.Logger.Println("ℹ️ Nacos client does not require explicit closing. Ephemeral nodes will expire.")
 	}
 }

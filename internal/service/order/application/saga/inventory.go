@@ -2,9 +2,9 @@ package saga
 
 import (
 	"context"
-	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"nexus/internal/pkg/logger"
 )
 
 // InventoryHandler 负责库存预占步骤。
@@ -16,7 +16,7 @@ func (h *InventoryHandler) Handle(orderCtx *OrderContext) error {
 	ctx, span := orderCtx.Tracer.Start(orderCtx.Ctx, "saga.InventoryReserve")
 	defer span.End()
 
-	fmt.Println("【Saga】=> 步骤 2: 预占库存...")
+	logger.Ctx(ctx).Println("【Saga】=> 步骤 2: 预占库存...")
 
 	itemsToReserve := map[string]int{}
 	for _, item := range orderCtx.Order.Items {

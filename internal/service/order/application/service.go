@@ -4,7 +4,7 @@ package application
 import (
 	"context"
 	"go.opentelemetry.io/otel/attribute"
-	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/application/saga"
 	"nexus/internal/service/order/domain"
 	"nexus/internal/service/order/domain/port"
@@ -56,7 +56,7 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to create order entity")
-		log.Printf("ERROR: [Order: %s] Failed to create order entity: %v", event.EventID, err)
+		logger.Ctx(ctx).Printf("ERROR: [Order: %s] Failed to create order entity: %v", event.EventID, err)
 		return err
 	}
 
@@ -64,7 +64,7 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	if err := s.orderRepo.Save(processingCtx, orderEntity); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to save initial order")
-		log.Printf("ERROR: [Order: %s] Failed to save initial order: %v", orderEntity.ID, err)
+		logger.Ctx(ctx).Printf("ERROR: [Order: %s] Failed to save initial order: %v", orderEntity.ID, err)
 		return err
 	}
 	span.AddEvent("Initial order saved with CREATED state.")
@@ -83,19 +83,19 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 		SeckillService:   s.seckillService,
 	}
 
-	log.Printf("INFO: [Order: %s] Starting verification and reservation process for user %s.", orderEntity.ID, event.UserID)
+	logger.Ctx(ctx).Printf("INFO: [Order: %s] Starting verification and reservation process for user %s.", orderEntity.ID, event.UserID)
 
 	orderChain := s.buildChain()
 
 	// 6. 执行责任链
 	if err := orderChain.Handle(orderContext); err != nil {
-		log.Printf("ERROR: [Order: %s] Order processing chain failed: %v. SAGA compensation triggered.", orderEntity.ID, err)
+		logger.Ctx(ctx).Printf("ERROR: [Order: %s] Order processing chain failed: %v. SAGA compensation triggered.", orderEntity.ID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Order processing failed in chain")
 
 		orderEntity.MarkAsFailed()
 		if updateErr := s.orderRepo.Save(processingCtx, orderEntity); updateErr != nil {
-			log.Printf("CRITICAL: [Order: %s] Failed to update order status to FAILED after compensation: %v", orderEntity.ID, updateErr)
+			logger.Ctx(ctx).Printf("CRITICAL: [Order: %s] Failed to update order status to FAILED after compensation: %v", orderEntity.ID, updateErr)
 			span.RecordError(updateErr, trace.WithAttributes(attribute.Bool("critical.error", true)))
 		}
 		return err // 返回主错误
@@ -106,12 +106,12 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	if err := s.orderRepo.Save(processingCtx, orderEntity); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to save order as pending payment")
-		log.Printf("CRITICAL: [Order: %s] Failed to save order as PENDING_PAYMENT: %v", orderEntity.ID, err)
+		logger.Ctx(ctx).Printf("CRITICAL: [Order: %s] Failed to save order as PENDING_PAYMENT: %v", orderEntity.ID, err)
 		orderContext.TriggerCompensation(processingCtx) // 触发补偿
 		return err
 	}
 
-	log.Printf("SUCCESS: [Order: %s] All resources reserved. Order status is now PENDING_PAYMENT.", orderEntity.ID)
+	logger.Ctx(ctx).Printf("SUCCESS: [Order: %s] All resources reserved. Order status is now PENDING_PAYMENT.", orderEntity.ID)
 	span.AddEvent("Order successfully processed and is pending payment.")
 	return nil
 }
@@ -137,7 +137,7 @@ func (s *OrderApplicationService) RequestOrderCreation(ctx context.Context, req 
 	}
 
 	span.AddEvent("Order creation request sent to Kafka queue.")
-	log.Printf("Successfully enqueued order creation request for user %s with EventID %s", event.UserID, event.EventID)
+	logger.Ctx(ctx).Printf("Successfully enqueued order creation request for user %s with EventID %s", event.UserID, event.EventID)
 
 	// 4. 立即返回响应，告知客户端请求已被接受
 	return &CreateOrderResponse{
@@ -156,7 +156,7 @@ func (s *OrderApplicationService) ProcessTimeoutCheckMessage(ctx context.Context
 		attribute.String("order.id", event.OrderID),
 		attribute.String("user.id", event.UserID),
 	)
-	log.Printf("INFO: [Order: %s] Timeout checker running.", event.OrderID)
+	logger.Ctx(ctx).Printf("INFO: [Order: %s] Timeout checker running.", event.OrderID)
 
 	currentStatus := domain.StatePaid
 	if true {
@@ -168,7 +168,7 @@ func (s *OrderApplicationService) ProcessTimeoutCheckMessage(ctx context.Context
 		attribute.String("orderId", event.OrderID),
 	)
 
-	log.Printf("INFO: [Order: %s] Timeout checker running. Current status is '%s'.", event.OrderID, currentStatus)
+	logger.Ctx(ctx).Printf("INFO: [Order: %s] Timeout checker running. Current status is '%s'.", event.OrderID, currentStatus)
 
 	// 1. 从当前带有超时的上下文中，提取出纯粹的、不含超时的 Span 上下文信息。
 	//    这部分信息只包含 TraceID, SpanID 等，用于关联链路。
@@ -179,7 +179,7 @@ func (s *OrderApplicationService) ProcessTimeoutCheckMessage(ctx context.Context
 	timeoutTaskCtx := trace.ContextWithRemoteSpanContext(context.Background(), spanContext)
 
 	if currentStatus == domain.StatePendingPayment {
-		log.Printf("WARN: [Order: %s] Order has not been paid within the time limit. Cancelling and releasing resources.", event.OrderID)
+		logger.Ctx(ctx).Printf("WARN: [Order: %s] Order has not been paid within the time limit. Cancelling and releasing resources.", event.OrderID)
 
 		itemsToReserve := map[string]int{}
 		for _, item := range event.Items {

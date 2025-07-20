@@ -7,7 +7,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	"gopkg.in/yaml.v3"
-	"log"
+	"nexus/internal/pkg/logger"
 	"os"
 	"strconv"
 	"strings"
@@ -72,7 +72,7 @@ func Init() {
 	// 2. 创建 Nacos 客户端配置
 	serverConfigs, err := createNacosServerConfigs(nacosServerAddrs)
 	if err != nil {
-		log.Fatalf("FATAL: Invalid Nacos server address format: %v", err)
+		logger.Logger.Fatal().Msgf("FATAL: Invalid Nacos server address format: %v", err)
 	}
 	clientConfig := createNacosClientConfig(nacosNamespace)
 
@@ -84,7 +84,7 @@ func Init() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("FATAL: Failed to create Nacos config client: %v", err)
+		logger.Logger.Fatal().Msgf("FATAL: Failed to create Nacos config client: %v", err)
 	}
 
 	// 4. 拉取并监听两个配置文件
@@ -93,7 +93,7 @@ func Init() {
 	// b. 应用业务配置
 	initAndWatchSingleConfig("nexus-app.yaml", nacosGroup, &GlobalConfig.App)
 
-	log.Println("✅ Bootstrap Phase 1: All configurations loaded and watched successfully.")
+	logger.Logger.Println("✅ Bootstrap Phase 1: All configurations loaded and watched successfully.")
 }
 
 // GetCurrentConfig 返回一个线程安全的配置副本
@@ -107,7 +107,7 @@ func GetCurrentConfig() Config {
 func initAndWatchSingleConfig(dataId, group string, configPtr interface{}) {
 	content, err := nacosConfigClient.GetConfig(vo.ConfigParam{DataId: dataId, Group: group})
 	if err != nil {
-		log.Fatalf("FATAL: Failed to get initial config for DataId '%s': %v", dataId, err)
+		logger.Logger.Fatal().Msgf("FATAL: Failed to get initial config for DataId '%s': %v", dataId, err)
 	}
 
 	updateConfig(content, configPtr) // 加载初始配置
@@ -116,12 +116,12 @@ func initAndWatchSingleConfig(dataId, group string, configPtr interface{}) {
 		DataId: dataId,
 		Group:  group,
 		OnChange: func(_, _, _, data string) {
-			log.Printf("🔔 Nacos config changed for DataId: %s. Applying new config...", dataId)
+			logger.Logger.Printf("🔔 Nacos config changed for DataId: %s. Applying new config...", dataId)
 			updateConfig(data, configPtr)
 		},
 	})
 	if err != nil {
-		log.Fatalf("FATAL: Failed to listen config for DataId '%s': %v", dataId, err)
+		logger.Logger.Fatal().Msgf("FATAL: Failed to listen config for DataId '%s': %v", dataId, err)
 	}
 }
 
@@ -130,7 +130,7 @@ func updateConfig(content string, configPtr interface{}) {
 	configLock.Lock()
 	defer configLock.Unlock()
 	if err := yaml.Unmarshal([]byte(content), configPtr); err != nil {
-		log.Printf("❌ ERROR: Failed to unmarshal Nacos config: %v", err)
+		logger.Logger.Printf("❌ ERROR: Failed to unmarshal Nacos config: %v", err)
 	}
 }
 
