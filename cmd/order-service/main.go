@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"nexus/internal/pkg/bootstrap"
 	"nexus/internal/pkg/httpclient"
@@ -109,7 +108,7 @@ func registerService(app *bootstrap.Application, deps *Dependencies) error {
 
 	// 3. 注册其他需要关闭的资源
 	app.AddTask(nil, func(ctx context.Context) error {
-		log.Println("Closing kafka writers...")
+		logger.Ctx(ctx).Println("Closing kafka writers...")
 		deps.NotificationWriter.Close()
 		deps.DelayWriter.Close()
 		deps.OrderCreationWriter.Close()

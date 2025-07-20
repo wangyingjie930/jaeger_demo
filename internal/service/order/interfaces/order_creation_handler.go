@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"go.opentelemetry.io/otel"
-	"log"
 	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/application"
@@ -47,7 +46,7 @@ func (a *OrderConsumerAdapter) Start(ctx context.Context) error {
 			if err != nil {
 				// 如果是上下文取消导致的错误，则正常退出
 				if ctx.Err() != nil {
-					log.Println("🛑 Kafka Consumer Adapter shutting down.")
+					logger.Ctx(ctx).Error().Err(ctx.Err()).Msg("🛑 Kafka Consumer Adapter shutting down.")
 					return
 				}
 				logger.Ctx(ctx).Printf("ERROR: could not read message: %v. Retrying...", err)

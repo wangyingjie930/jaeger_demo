@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/logger"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -30,7 +30,7 @@ func handleFraudCheck(w http.ResponseWriter, r *http.Request) {
 	var tracer = otel.Tracer(serviceName)
 	_, span := tracer.Start(ctx, "fraud-detection-service.Check")
 	defer span.End()
-	log.Println("Performing fraud check...")
+	logger.Ctx(ctx).Println("Performing fraud check...")
 	time.Sleep(80 * time.Millisecond)
 	span.AddEvent("Fraud check passed")
 	w.WriteHeader(http.StatusOK)

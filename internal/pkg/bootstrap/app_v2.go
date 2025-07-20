@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/nacos"
@@ -72,13 +71,13 @@ func NewApplication[T any](info AppInfoV2[T]) (*Application, error) {
 
 	serverConfigs, err := createNacosServerConfigs(nacosServerAddrs)
 	if err != nil {
-		log.Fatalf("FATAL: Invalid Nacos server address format: %v", err)
+		logger.Logger.Fatal().Err(err).Msgf("FATAL: Invalid Nacos server address")
 	}
 	clientConfig := createNacosClientConfig(nacosNamespace)
 
 	namingClient, err := nacos.NewNacosClientWithConfigs(serverConfigs, &clientConfig, nacosGroup)
 	if err != nil {
-		log.Fatalf("failed to initialize nacos client: %v", err)
+		logger.Logger.Fatal().Err(err).Msgf("failed to initialize nacos client: %v", err)
 	}
 
 	// 4. 创建 Application 实例
@@ -189,18 +188,18 @@ func (app *Application) AddTask(start func(ctx context.Context) error, stop func
 // addCoreShutdownTasks 注册核心基础设施组件的关停任务。
 func (app *Application) addCoreShutdownTasks() {
 	app.AddTask(nil, func(ctx context.Context) error {
-		log.Println("Closing Nacos clients...")
+		logger.Logger.Printf("Closing Nacos clients...")
 		nacosConfigClient.CloseClient()
 		app.nacosNaming.Close()
-		log.Println("✅ Nacos clients closed.")
+		logger.Logger.Printf("✅ Nacos clients closed.")
 		return nil
 	})
 	app.AddTask(nil, func(ctx context.Context) error {
-		log.Println("Shutting down tracer provider...")
+		logger.Logger.Printf("Shutting down tracer provider...")
 		if err := app.tracer.Shutdown(ctx); err != nil {
 			return err
 		}
-		log.Println("✅ Tracer provider shut down.")
+		logger.Logger.Printf("✅ Tracer provider shut down.")
 		return nil
 	})
 }
