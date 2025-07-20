@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	"io/ioutil"
-	"log"
+	"nexus/internal/pkg/logger"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +22,7 @@ type Client struct {
 // 对于集群模式, redisAddrs 应该是逗号分隔的地址列表 "host1:port1,host2:port2"
 func NewClient(redisAddrs string) (*Client, error) {
 	addrs := strings.Split(redisAddrs, ",")
-	log.Printf("Connecting to Redis with addresses: %v", addrs)
+	logger.Logger.Printf("Connecting to Redis with addresses: %v", addrs)
 
 	var rdb redis.UniversalClient
 	if len(addrs) > 1 {
@@ -42,31 +41,12 @@ func NewClient(redisAddrs string) (*Client, error) {
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
-	log.Println("✅ Successfully connected to Redis.")
+	logger.Logger.Println("✅ Successfully connected to Redis.")
 
 	return &Client{
 		rdb:     rdb,
 		scripts: new(sync.Map),
 	}, nil
-}
-
-// ✨ [核心改造] LoadScriptFromFile 加载一个 Lua 脚本并缓存它的 *redis.Script 对象
-// scriptName 是一个唯一标识符, filePath 是脚本文件的路径
-func (c *Client) LoadScriptFromFile(scriptName, filePath string) error {
-	if _, loaded := c.scripts.Load(scriptName); loaded {
-		return fmt.Errorf("script '%s' is already loaded", scriptName)
-	}
-
-	scriptBytes, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("could not read script file %s: %w", filePath, err)
-	}
-
-	script := redis.NewScript(string(scriptBytes))
-	c.scripts.Store(scriptName, script)
-
-	log.Printf("✅ Lua script '%s' from %s loaded successfully.", scriptName, filePath)
-	return nil
 }
 
 func (c *Client) LoadScriptFromContent(scriptName, content string) error {
@@ -77,7 +57,7 @@ func (c *Client) LoadScriptFromContent(scriptName, content string) error {
 	script := redis.NewScript(content)
 	c.scripts.Store(scriptName, script)
 
-	log.Printf("✅ Lua script '%s' from %s loaded successfully.", scriptName, content)
+	logger.Logger.Printf("✅ Lua script '%s' from %s loaded successfully.", scriptName, content)
 	return nil
 }
 

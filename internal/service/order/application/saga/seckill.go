@@ -40,7 +40,7 @@ func (h *SeckillHandler) Handle(orderCtx *OrderContext) error {
 
 	switch result {
 	case port.SeckillResultSuccess:
-		fmt.Printf("【Saga】=> 用户 %s 成功抢到商品 %s\n", orderCtx.Order.UserID, productID)
+		logger.Ctx(ctx).Printf("【Saga】=> 用户 %s 成功抢到商品 %s\n", orderCtx.Order.UserID, productID)
 		span.AddEvent("Seckill check passed")
 
 		// 继续执行下一个处理器

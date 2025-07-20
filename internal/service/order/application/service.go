@@ -56,7 +56,7 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to create order entity")
-		logger.Ctx(ctx).Printf("ERROR: [Order: %s] Failed to create order entity: %v", event.EventID, err)
+		logger.Ctx(ctx).Error().Err(err).Str("order_id", orderEntity.ID).Msg("Failed to create order entity")
 		return err
 	}
 
@@ -64,7 +64,7 @@ func (s *OrderApplicationService) HandleOrderCreationEvent(ctx context.Context, 
 	if err := s.orderRepo.Save(processingCtx, orderEntity); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to save initial order")
-		logger.Ctx(ctx).Printf("ERROR: [Order: %s] Failed to save initial order: %v", orderEntity.ID, err)
+		logger.Ctx(ctx).Error().Err(err).Str("order_id", orderEntity.ID).Msg("Failed to save initial order")
 		return err
 	}
 	span.AddEvent("Initial order saved with CREATED state.")

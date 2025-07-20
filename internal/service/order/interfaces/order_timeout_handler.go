@@ -37,7 +37,7 @@ func (a *OrderTimeOutConsumerAdapter) Start(ctx context.Context) error {
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		log.Printf("✅ Kafka Consumer Adapter started for topic '%s'.", a.reader.Config().Topic)
+		logger.Ctx(ctx).Printf("✅ Kafka Consumer Adapter started for topic '%s'.", a.reader.Config().Topic)
 		for {
 			if a.stopped {
 				return

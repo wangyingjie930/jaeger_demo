@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/mq"
 	"nexus/internal/pkg/tracing"
 	"os"
@@ -51,6 +51,8 @@ type NotificationEvent struct {
 }
 
 func main() {
+	logger.Init(serviceName)
+
 	tp, err := tracing.InitTracerProvider(serviceName, jaegerEndpoint)
 	if err != nil {
 		log.Fatalf("failed to initialize tracer provider: %v", err)
@@ -60,22 +62,21 @@ func main() {
 	reader := mq.NewKafkaReader(kafkaBrokers, notificationTopic, consumerGroupID)
 	defer reader.Close()
 
-	log.Println("Notification Service started as a Kafka consumer for topic:", notificationTopic)
+	logger.Logger.Println("Notification Service started as a Kafka consumer for topic:", notificationTopic)
 
 	for {
-		msg, err := reader.ReadMessage(context.Background())
+		ctx := context.Background()
+		msg, err := reader.ReadMessage(ctx)
 		if err != nil {
-			log.Printf("could not read message: %v", err)
+			logger.Ctx(ctx).Error().Err(err).Msg("could not read message")
 			continue
 		}
-		go processNotification(msg)
+		ctx = mq.ExtractTraceContext(ctx, msg.Headers)
+		go processNotification(ctx, msg)
 	}
 }
 
-func processNotification(msg kafka.Message) {
-	fmt.Println("hi.....")
-	ctx := mq.ExtractTraceContext(context.Background(), msg.Headers)
-
+func processNotification(ctx context.Context, msg kafka.Message) {
 	spanOpts := []trace.SpanStartOption{
 		trace.WithAttributes(
 			attribute.String("messaging.system", "kafka"),
@@ -89,7 +90,7 @@ func processNotification(msg kafka.Message) {
 
 	var event NotificationEvent
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
-		log.Printf("failed to unmarshal message: %v", err)
+		logger.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal message")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return
@@ -109,14 +110,14 @@ func processNotification(msg kafka.Message) {
 	}
 
 	// 模拟发送通知的耗时
-	log.Printf("Sending notification to user %s: %s", event.UserID, event.Message)
+	logger.Ctx(ctx).Printf("Sending notification to user %s: %s", event.UserID, event.Message)
 	if event.PromotionID != "" {
-		log.Printf("--> This is a special promotion notification: %s", event.PromotionID)
+		logger.Ctx(ctx).Printf("--> This is a special promotion notification: %s", event.PromotionID)
 		span.AddEvent("Personalized promotion notification sent")
 	} else {
 		span.AddEvent("Standard notification sent")
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	log.Printf("Successfully processed notification for user %s", event.UserID)
+	logger.Ctx(ctx).Printf("Successfully processed notification for user %s", event.UserID)
 }

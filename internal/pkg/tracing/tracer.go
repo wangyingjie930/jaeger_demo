@@ -4,7 +4,7 @@ package tracing
 import (
 	"context"
 	"go.opentelemetry.io/otel/trace"
-	"log"
+	"nexus/internal/pkg/logger"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -44,7 +44,7 @@ func InitTracerProvider(serviceName, jaegerEndpoint string) (*sdktrace.TracerPro
 	// 设置全局的 TextMapPropagator，用于在服务间传递上下文
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
-	log.Printf("Tracing initialized for service '%s' exporting to '%s'", serviceName, jaegerEndpoint)
+	logger.Logger.Printf("Tracing initialized for service '%s' exporting to '%s'", serviceName, jaegerEndpoint)
 	return tp, nil
 }
 

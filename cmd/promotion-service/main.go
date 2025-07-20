@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/service/promotion/application"
 	"nexus/internal/service/promotion/infrastructure"
 	"nexus/internal/service/promotion/interfaces"
@@ -55,7 +56,7 @@ func main() {
 			// 6. **启动服务并注册路由**
 			promoHandler.RegisterRoutes(appCtx.Mux)
 
-			log.Printf("✅ Promotion service routes registered.")
+			logger.Logger.Printf("✅ Promotion service routes registered.")
 		},
 	})
 }

@@ -3,9 +3,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"nexus/internal/pkg/bootstrap"
+	"nexus/internal/pkg/logger"
 	"nexus/internal/pkg/zookeeper"
 	"strconv"
 	"strings"
@@ -36,7 +36,7 @@ func main() {
 	var err error
 	zkConn, err = zookeeper.InitZookeeper(servers)
 	if err != nil {
-		log.Fatalf("failed to initialize zookeeper connection: %v", err)
+		logger.Logger.Fatal().Err(err).Msg("failed to initialize zookeeper connectio")
 	}
 	// 服务关闭时，也需要关闭ZK连接
 	defer zkConn.Close()
@@ -75,23 +75,23 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 	// <<<< 5. 在核心业务逻辑外层，加上分布式锁
 	// 使用 itemId 作为锁的资源标识
 	lock := zookeeper.NewDistributedLock(zkConn, itemId)
-	log.Printf("Attempting to acquire lock for item %s, order %s", itemId, orderID)
+	logger.Ctx(ctx).Printf("Attempting to acquire lock for item %s, order %s", itemId, orderID)
 	span.AddEvent("Acquiring distributed lock")
 
 	if err := lock.Lock(); err != nil {
-		log.Printf("ERROR: Failed to acquire lock for item %s: %v", itemId, err)
+		logger.Ctx(ctx).Error().Err(err).Str("item", itemId).Msg("Failed to acquire lock for item")
 		http.Error(w, "Failed to acquire lock, please try again later", http.StatusServiceUnavailable)
 		return
 	}
-	log.Printf("Successfully acquired lock for item %s, order %s", itemId, orderID)
+	logger.Ctx(ctx).Printf("Successfully acquired lock for item %s, order %s", itemId, orderID)
 	span.AddEvent("Acquired distributed lock")
 
 	// 确保锁一定会被释放
 	defer func() {
-		log.Printf("Releasing lock for item %s, order %s", itemId, orderID)
+		logger.Ctx(ctx).Printf("Releasing lock for item %s, order %s", itemId, orderID)
 		if err := lock.Unlock(); err != nil {
 			// 在真实生产环境中，释放锁失败需要记录严重错误日志，并可能需要人工介入
-			log.Printf("CRITICAL: Failed to release lock for item %s: %v", itemId, err)
+			logger.Ctx(ctx).Printf("CRITICAL: Failed to release lock for item %s: %v", itemId, err)
 		} else {
 			span.AddEvent("Released distributed lock")
 		}
@@ -100,7 +100,7 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 	// ------------------ START: 原有的核心业务逻辑 ------------------
 	// 故障注入点
 	if itemId == "item-faulty-123" && quantity > 10 {
-		log.Printf("Injecting fault for item %s", itemId)
+		logger.Ctx(ctx).Printf("Injecting fault for item %s", itemId)
 		time.Sleep(500 * time.Millisecond)
 
 		err := fmt.Errorf("inventory reserve failed for faulty item %s", itemId)
@@ -112,10 +112,10 @@ func reserveStockHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 模拟数据库库存检查和扣减，这里现在是线程安全的了
-	log.Println("Simulating stock check and deduction in database...")
+	logger.Ctx(ctx).Println("Simulating stock check and deduction in database...")
 	time.Sleep(100 * time.Millisecond)
 
-	log.Printf("Stock reservation successful for item %s, order %s", itemId, orderID)
+	logger.Ctx(ctx).Printf("Stock reservation successful for item %s, order %s", itemId, orderID)
 	span.AddEvent("Stock reserved")
 	// ------------------ END: 核心业务逻辑 ------------------
 
@@ -139,7 +139,7 @@ func releaseStockHandler(w http.ResponseWriter, r *http.Request) {
 		attribute.Bool("compensation.logic", true),
 	)
 
-	log.Printf("Stock release successful for item %s, order %s", itemId, orderID)
+	logger.Ctx(ctx).Printf("Stock release successful for item %s, order %s", itemId, orderID)
 	span.AddEvent("Stock released")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Stock released"))
@@ -153,7 +153,7 @@ func checkStockHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	itemId := r.URL.Query().Get("itemId")
-	log.Printf("Stock check successful for item %s", itemId)
+	logger.Ctx(ctx).Printf("Stock check successful for item %s", itemId)
 	span.AddEvent("Stock check successful")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Stock available"))
