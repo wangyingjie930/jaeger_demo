@@ -15,24 +15,32 @@ const (
 )
 
 // UserCoupon 代表一个用户持有的一张具体的优惠券实例。
+// 这是领域模型，现在包含了所有必要的业务字段。
 type UserCoupon struct {
 	ID         int64
 	UserID     int64
+	CouponCode string // [新增] 唯一的券码，用于核销
 	Status     UserCouponStatus
-	ReceivedAt time.Time
-	UsedAt     time.Time
-	ExpiredAt  time.Time
+	IssueDate  time.Time  // [修正] 命名与GORM模型统一 (原 ReceivedAt)
+	ExpiryDate time.Time  // [修正] 命名与GORM模型统一 (原 ExpiredAt)
+	UsedAt     *time.Time // [修正] 使用指针类型，允许为NULL (原 time.Time)
 
-	// 关键关联：指向一个特定版本的优惠模板。
+	// 关键关联：指向一个特定版本的优惠模板ID。
 	// 这确保了即使用户领取后，管理员修改了活动规则，
 	// 用户手中的券的权益仍然被锁定在领取时的版本。
-	TemplateID      int64
-	TemplateVersion int32
+	TemplateID int64
+
+	// [移除] TemplateVersion 字段是冗余的，因为 TemplateID 本身就指向一个唯一的、带版本的模板记录。
+
+	// [新增] 添加标准的时间戳字段
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // IsAvailable 检查优惠券当前是否可用（非终态）。
 func (uc *UserCoupon) IsAvailable() bool {
-	return uc.Status == StatusUnused && time.Now().Before(uc.ExpiredAt)
+	// [修正] 使用修正后的字段名 ExpiryDate
+	return uc.Status == StatusUnused && time.Now().Before(uc.ExpiryDate)
 }
 
 // Freeze 将优惠券状态置为冻结，用于SAGA流程。

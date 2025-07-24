@@ -35,7 +35,7 @@ type PromotionService interface {
 	// CalculateBestOffer 评估并计算最优优惠
 	// 这是规则引擎的核心价值所在，也是性能要求最高的接口
 	// 它接收一个“事实”对象，包含了计算所需的所有上下文 [cite: 39]
-	CalculateBestOffer(ctx context.Context, fact *domain.Fact) (*DiscountApplication, error)
+	CalculateBestOffer(ctx context.Context, fact *domain.Fact) (*DiscountApplicationResponse, error)
 
 	// GetApplicableCoupons 获取用户在当前“事实”下所有可用的优惠券列表
 	// 用于在购物车或结算页向用户展示可用优惠券

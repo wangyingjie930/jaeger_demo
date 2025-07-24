@@ -214,26 +214,4 @@ export TRACING_ENABLED=true
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 开启 Pull Request
 
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 📞 支持
-
-- **问题反馈**: [GitHub Issues](https://github.com/your-repo/nexus/issues)
-- **文档**: [项目 Wiki](https://github.com/your-repo/nexus/wiki)
-- **讨论**: [GitHub Discussions](https://github.com/your-repo/nexus/discussions)
-
-## 🙏 致谢
-
-感谢以下开源项目的支持：
-
-- [Go](https://golang.org/) - 编程语言
-- [Jaeger](https://www.jaegertracing.io/) - 分布式追踪
-- [Kafka](https://kafka.apache.org/) - 消息队列
-- [Prometheus](https://prometheus.io/) - 监控系统
-- [Kubernetes](https://kubernetes.io/) - 容器编排
-
----
-
-⭐ 如果这个项目对您有帮助，请给我们一个星标！ 
+git subtree push --prefix=internal/service/promotion split-promotion main
