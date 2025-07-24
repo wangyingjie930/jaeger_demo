@@ -28,11 +28,12 @@ func NewPromotionService(
 	templateRepo domain.PromotionTemplateRepository,
 	couponRepo domain.CouponRepository,
 ) PromotionService {
+	engine, _ := rule.NewCelRuleEngine()
 	return &promotionServiceImpl{
 		templateRepo: templateRepo,
 		couponRepo:   couponRepo,
-		ruleEngine:   rule.NewJSONRuleEngineAdapter(), // 直接实例化基础设施层的具体实现
-		strategyFty:  discount.NewStrategyFactory(),   // 工厂模式 [cite: 156]
+		ruleEngine:   engine,                        // 直接实例化基础设施层的具体实现
+		strategyFty:  discount.NewStrategyFactory(), // 工厂模式 [cite: 156]
 	}
 }
 
