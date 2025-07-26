@@ -1,0 +1,74 @@
+# .github/workflows/build-and-push-on-tag.yml
+
+name: Build and Push Service Images on Tag
+
+# 1. 触发条件：只在推送 'v' 开头的 tag 时触发 (例如 v1.0.0, v1.2.3-alpha)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-push-services:
+    runs-on: ubuntu-latest
+
+    # 2. 定义构建矩阵，并行处理所有服务
+    strategy:
+      matrix:
+        # 这里的服务列表直接从你的 build-all.sh 文件中提取
+        service:
+          - "inventory-service"
+          - "notification-service"
+          - "pricing-service"
+          - "fraud-detection-service"
+          - "shipping-service"
+          - "order-service-v2"
+          - "delay-scheduler"
+
+    steps:
+      # 3. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 4. 设置 Docker Buildx，这是推荐的构建器
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 5. 登录到你的容器镜像仓库 (这里使用 Docker Hub)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }} # 请在 GitHub Secrets 中配置 DOCKERHUB_USERNAME
+          password: ${{ secrets.DOCKERHUB_TOKEN }}    # 请在 GitHub Secrets 中配置 DOCKERHUB_TOKEN
+
+      # 6. 为每个服务的镜像生成元数据 (标签和 Label)
+      - name: Docker meta for ${{ matrix.service }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # 镜像名称格式: <你的用户名>/nexus-<服务名>
+          # 例如: yingjiewang/nexus-inventory-service
+          images: yingjiewang/nexus-${{ matrix.service }}
+          tags: |
+            # type=ref,event=tag 会自动提取 Git 标签名作为 Docker 标签
+            # 例如, 当你推送一个名为 v1.2.3 的 Git 标签时,
+            # 这个步骤会为镜像生成一个 v1.2.3 的标签
+            type=ref,event=tag
+
+      # 7. 构建并推送单个服务的镜像
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # Dockerfile 位于项目根目录
+          file: ./Dockerfile
+          # 将服务名作为构建参数传递给 Dockerfile
+          build-args: |
+            SERVICE_NAME=${{ matrix.service }}
+          push: true # 因为只有在打tag时才运行，所以总是推送
+          # 使用上一步生成的元数据作为镜像的标签和 Labels
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 启用 GHA 缓存以提高后续构建速度
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
