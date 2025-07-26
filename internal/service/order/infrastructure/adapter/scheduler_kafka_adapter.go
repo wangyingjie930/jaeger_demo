@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/segmentio/kafka-go"
+	"github.com/wangyingjie930/nexus-pkg/mq"
 	"go.opentelemetry.io/otel/trace"
-	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/domain"
 	"time"
 )

@@ -2,9 +2,9 @@ package saga
 
 import (
 	"fmt"
+	"github.com/wangyingjie930/nexus-pkg/logger"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"nexus/internal/pkg/logger"
 	"nexus/internal/service/order/domain/port"
 )
 

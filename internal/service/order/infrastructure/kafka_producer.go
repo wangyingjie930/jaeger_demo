@@ -3,8 +3,8 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
-	"nexus/internal/pkg/logger"
-	"nexus/internal/pkg/mq"
+	"github.com/wangyingjie930/nexus-pkg/logger"
+	"github.com/wangyingjie930/nexus-pkg/mq"
 	"nexus/internal/service/order/domain"
 
 	"github.com/segmentio/kafka-go"

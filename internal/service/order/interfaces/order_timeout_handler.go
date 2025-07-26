@@ -4,9 +4,9 @@ package interfaces
 import (
 	"context"
 	"encoding/json"
+	"github.com/wangyingjie930/nexus-pkg/logger"
+	"github.com/wangyingjie930/nexus-pkg/mq"
 	"go.opentelemetry.io/otel"
-	"nexus/internal/pkg/logger"
-	"nexus/internal/pkg/mq"
 	"nexus/internal/service/order/application"
 	"nexus/internal/service/order/domain"
 	"sync"

@@ -77,19 +77,20 @@ done
 
 
 # 定义已拆分出去的【远程服务】及其 Git 仓库地址
+# 使用两个平行数组来模拟关联数组，兼容 macOS 的 bash 3.x
+REMOTE_SERVICE_NAMES=("promotion-service")
+REMOTE_SERVICE_URLS=("https://github.com/wangyingjie930/nexus-promotion")
 
-REMOTE_SERVICES=(
-    ["promotion-service"]="https://github.com/wangyingjie930/nexus-promotion"
-)
 # 临时构建目录，用于存放拉取下来的远程代码
 BUILD_DIR=$(mktemp -d)
 # 确保脚本退出时自动清理临时目录
 trap 'echo "🧹 清理临时构建目录: ${BUILD_DIR}"; rm -rf "$BUILD_DIR"' EXIT
 
 echo -e "\n${BLUE}--- Phase 2: 构建远程服务 ---${NC}"
-if [ ${#REMOTE_SERVICES[@]} -gt 0 ]; then
-    for service in "${!REMOTE_SERVICES[@]}"; do
-        repo_url=${REMOTE_SERVICES[$service]}
+if [ ${#REMOTE_SERVICE_NAMES[@]} -gt 0 ]; then
+    for i in "${!REMOTE_SERVICE_NAMES[@]}"; do
+        service="${REMOTE_SERVICE_NAMES[$i]}"
+        repo_url="${REMOTE_SERVICE_URLS[$i]}"
         echo -e "🔧 处理远程服务: ${BLUE}${service}${NC}"
 
         echo "  - 克隆仓库: ${repo_url}"

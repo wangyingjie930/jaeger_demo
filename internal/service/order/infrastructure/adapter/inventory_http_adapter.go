@@ -2,9 +2,9 @@ package adapter
 
 import (
 	"context"
+	"github.com/wangyingjie930/nexus-pkg/constants"
+	"github.com/wangyingjie930/nexus-pkg/httpclient"
 	"net/url"
-	"nexus/internal/pkg/constants"
-	"nexus/internal/pkg/httpclient"
 	"strconv"
 )
 

@@ -4,9 +4,9 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/wangyingjie930/nexus-pkg/session"
 	"log"
 	"net/http"
-	"nexus/internal/pkg/session"
 	"os"
 	"sync"
 )

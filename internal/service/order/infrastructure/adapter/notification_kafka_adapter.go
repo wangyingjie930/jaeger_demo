@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/segmentio/kafka-go"
-	"nexus/internal/pkg/mq"
+	"github.com/wangyingjie930/nexus-pkg/mq"
 	"nexus/internal/service/order/domain"
 	"time"
 )

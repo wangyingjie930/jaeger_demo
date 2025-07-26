@@ -3,9 +3,9 @@ package main
 
 import (
 	"context"
-	"nexus/internal/pkg/logger"
-	"nexus/internal/pkg/mq"
-	"nexus/internal/pkg/tracing"
+	"github.com/wangyingjie930/nexus-pkg/logger"
+	"github.com/wangyingjie930/nexus-pkg/mq"
+	"github.com/wangyingjie930/nexus-pkg/tracing"
 	"os"
 	"strings"
 	"sync"

@@ -3,10 +3,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/wangyingjie930/nexus-pkg/bootstrap"
+	"github.com/wangyingjie930/nexus-pkg/logger"
+	"github.com/wangyingjie930/nexus-pkg/zookeeper"
 	"net/http"
-	"nexus/internal/pkg/bootstrap"
-	"nexus/internal/pkg/logger"
-	"nexus/internal/pkg/zookeeper"
 	"strconv"
 	"strings"
 	"time"

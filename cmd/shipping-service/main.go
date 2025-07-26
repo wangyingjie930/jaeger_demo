@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/wangyingjie930/nexus-pkg/bootstrap"
+	"github.com/wangyingjie930/nexus-pkg/tracing"
 	"go.opentelemetry.io/otel/propagation"
 	"net/http"
-	"nexus/internal/pkg/bootstrap"
-	"nexus/internal/pkg/tracing"
 	"time"
 
 	"go.opentelemetry.io/otel"

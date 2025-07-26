@@ -45,7 +45,7 @@ SERVICES=(
     "pricing-service:8084"
     "fraud-detection-service:8085"
     "shipping-service:8086"
-#    "promotion-service:8087"  # 新增
+    "promotion-service:8087"  # 新增
     "delay-scheduler"
 )
 # <<<<<<< 改造点结束 >>>>>>>>>
@@ -94,10 +94,6 @@ else
     echo -e "${GREEN}✅ Jaeger 已在运行中${NC}"
 fi
 
-REMOTE_SERVICES=(
-    ["promotion-service"]="../nexus-promotion"
-)
-
 # 编译和启动所有微服务
 for service_config in "${SERVICES[@]}"; do
     service_name="${service_config%%:*}"
@@ -106,12 +102,15 @@ for service_config in "${SERVICES[@]}"; do
     echo -e "${BLUE}🔧 编译并启动 $service_name (端口: $port)...${NC}"
 
     # 检查是否为远程服务
-    if [[ -n "${REMOTE_SERVICES[$service_name]}" ]]; then
-        service_path="$SCRIPT_DIR/${REMOTE_SERVICES[$service_name]}"
-        echo -e "${YELLOW}🔍 $service_name 是远程服务，使用路径: $service_path${NC}"
-    else
-        service_path="$SCRIPT_DIR/cmd/$service_name"
-    fi
+    case "$service_name" in
+        "promotion-service")
+            service_path="$SCRIPT_DIR/../nexus-promotion/cmd"
+            echo -e "${YELLOW}🔍 $service_name 是远程服务，使用路径: $service_path${NC}"
+            ;;
+        *)
+            service_path="$SCRIPT_DIR/cmd/$service_name"
+            ;;
+    esac
     
     binary_path="$SCRIPT_DIR/deploy/${service_name}"
 

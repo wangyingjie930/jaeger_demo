@@ -1,8 +1,8 @@
 package saga
 
 import (
+	"github.com/wangyingjie930/nexus-pkg/logger"
 	"go.opentelemetry.io/otel/attribute"
-	"nexus/internal/pkg/logger"
 )
 
 // NotificationHandler 是 Saga 流程的最后一步，负责发送最终通知。

@@ -2,9 +2,9 @@ package saga
 
 import (
 	"context"
+	"github.com/wangyingjie930/nexus-pkg/logger"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"nexus/internal/pkg/logger"
 )
 
 // InventoryHandler 负责库存预占步骤。

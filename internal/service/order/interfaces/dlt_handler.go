@@ -3,8 +3,8 @@ package interfaces
 
 import (
 	"context"
-	"nexus/internal/pkg/logger"
-	"nexus/internal/pkg/mq"
+	"github.com/wangyingjie930/nexus-pkg/logger"
+	"github.com/wangyingjie930/nexus-pkg/mq"
 	"sync"
 
 	"github.com/segmentio/kafka-go"

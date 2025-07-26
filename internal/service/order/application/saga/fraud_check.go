@@ -1,8 +1,8 @@
 package saga
 
 import (
+	"github.com/wangyingjie930/nexus-pkg/logger"
 	"go.opentelemetry.io/otel/codes"
-	"nexus/internal/pkg/logger"
 )
 
 // FraudCheckHandler 负责欺诈检测步骤。

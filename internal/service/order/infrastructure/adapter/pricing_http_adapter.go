@@ -2,9 +2,9 @@ package adapter
 
 import (
 	"context"
+	"github.com/wangyingjie930/nexus-pkg/constants"
+	"github.com/wangyingjie930/nexus-pkg/httpclient"
 	"net/url"
-	"nexus/internal/pkg/constants"
-	"nexus/internal/pkg/httpclient"
 )
 
 // PricingHTTPAdapter 实现了 port.PricingService 和 port.ShippingService 接口。

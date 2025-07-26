@@ -14,71 +14,17 @@ x-go-service-base: &go-service-base
   build:
     <<: *go-build
   # 所有服务都依赖于基础设施
-  depends_on:
-    - jaeger
-    - kafka
-  # 将通用的环境变量放在这里
-  environment:
-    JAEGER_ENDPOINT: http://jaeger:14268/api/traces
-    KAFKA_BROKERS: kafka:29092
-    ZK_SERVERS: zookeeper:2181
+#  depends_on:
+#    - jaeger
+#    - kafka
+#  # 将通用的环境变量放在这里
+#  environment:
+#    JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+#    KAFKA_BROKERS: kafka:29092
+#    ZK_SERVERS: zookeeper:2181
 
 # ------------------ 服务定义 ------------------
 services:
-  # ------------------ 基础设施服务 ------------------
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.2
-    hostname: zookeeper
-    container_name: zookeeper
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
-  kafka:
-    image: confluentinc/cp-kafka:7.3.2
-    hostname: kafka
-    container_name: kafka
-    ports:
-      - "9092:9092"
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.57
-    container_name: jaeger
-    ports:
-      - "14268:14268"
-      - "16686:16686"
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-
-  # ------------------ Go 微服务定义 ------------------
-
-  api-gateway:
-    # 继承基础模板
-    <<: *go-service-base
-    container_name: api-gateway
-    # 在继承的 build 配置中，添加特定的 args
-    build:
-      args:
-        SERVICE_NAME: api-gateway
-    ports:
-      - "8080:8080"
-    # 在继承的环境变量基础上，添加服务特定的环境变量
-    environment:
-      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
-      KAFKA_BROKERS: kafka:29092
-      ORDER_SERVICE_BASE_URL: http://order-service:8081
-
   order-service:
     <<: *go-service-base
     container_name: order-service

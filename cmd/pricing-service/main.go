@@ -3,9 +3,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/wangyingjie930/nexus-pkg/bootstrap"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
-	"nexus/internal/pkg/bootstrap"
 	"os"
 	"time"
 

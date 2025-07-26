@@ -4,8 +4,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/wangyingjie930/nexus-pkg/bootstrap"
 	"net/http"
-	"nexus/internal/pkg/bootstrap"
 )
 
 const (

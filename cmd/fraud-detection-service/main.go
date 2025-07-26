@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/wangyingjie930/nexus-pkg/bootstrap"
+	"github.com/wangyingjie930/nexus-pkg/logger"
 	"net/http"
-	"nexus/internal/pkg/bootstrap"
-	"nexus/internal/pkg/logger"
 	"time"
 
 	"go.opentelemetry.io/otel"

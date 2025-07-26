@@ -3,7 +3,7 @@ package adapter
 import (
 	"context"
 	"fmt"
-	"nexus/internal/pkg/redis"
+	"github.com/wangyingjie930/nexus-pkg/redis"
 	"nexus/internal/service/order/domain/port"
 )
 
