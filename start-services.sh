@@ -59,8 +59,6 @@ mkdir -p "$LOG_DIR"
 # 创建部署目录
 mkdir -p "$SCRIPT_DIR/deploy"
 
-echo -e "${BLUE}🚀 开始启动 Jaeger Demo 微服务...${NC}"
-
 # 清理旧的PID文件
 rm -f "$PID_FILE"
 
@@ -76,23 +74,10 @@ for service_config in "${SERVICES[@]}"; do
     fi
 done
 
+#./../nexus-promotion/start.sh
 
-# 启动 Jaeger (如果安装了)
-echo -e "${BLUE}📊 检查 Jaeger 状态...${NC}"
-if ! curl -s http://localhost:16686 > /dev/null; then
-    echo -e "${YELLOW}⚠️  Jaeger 未运行，尝试启动...${NC}"
-    if command -v jaeger-all-in-one &> /dev/null; then
-        jaeger-all-in-one --collector.http-port=14268 --query.port=16686 > "$LOG_DIR/jaeger.log" 2>&1 &
-        JAEGER_PID=$!
-        echo $JAEGER_PID >> "$PID_FILE"
-        echo -e "${GREEN}✅ Jaeger 已启动 (PID: $JAEGER_PID)${NC}"
-        sleep 3 # 等待Jaeger启动
-    else
-        echo -e "${YELLOW}⚠️  Jaeger 命令不存在。请手动启动或使用 Docker: \ndocker run -d --name jaeger -p 16686:16686 -p 14268:14268 jaegertracing/all-in-one:latest${NC}"
-    fi
-else
-    echo -e "${GREEN}✅ Jaeger 已在运行中${NC}"
-fi
+#./../nexus-order/start.sh
+
 
 # 编译和启动所有微服务
 for service_config in "${SERVICES[@]}"; do
@@ -128,11 +113,6 @@ for service_config in "${SERVICES[@]}"; do
     echo -e "${GREEN}✅ $service_name 已启动 (PID: $SERVICE_PID)${NC}"
     sleep 1
 done
-
-
-./../nexus-order/start.sh
-./../nexus-promotion/start.sh
-
 
 
 # curl 'http://localhost:9081/create_complex_order?userId=user-normal-4567&is_vip=false&items=item-a,item-b' -H 'Host: nexus.local'

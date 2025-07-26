@@ -16,4 +16,4 @@ zookeeper:
   addrs: "zookeeper-headless.infra:2181"
 
 mysql:
-  addrs: "mysql.infra:3306"
+  addrs: "root:root@tcp(mysql.infra:3306)/test?charset=utf8mb4&parseTime=True&loc=Local"
