@@ -39,13 +39,13 @@ export NACOS_GROUP="nexus-group"   # 为项目所有服务定义一个统一的�
 # <<<<<<< 改造点: 增加新服务 >>>>>>>>>
 SERVICES=(
 #    "api-gateway:8080"
-#    "order-service:8081"
-#    "promotion-service:8087"  # 新增
-    "inventory-service:8082"
-    "notification-service:8083" # 端口改为消费Kafka，脚本中保留便于管理
-    "pricing-service:8084"
-    "fraud-detection-service:8085"
-    "shipping-service:8086"
+#    "order:8081"
+#    "promotion:8087"  # 新增
+    "inventory:8082"
+    "notification:8083" # 端口改为消费Kafka，脚本中保留便于管理
+    "pricing:8084"
+    "fraud-detection:8085"
+    "shipping:8086"
     "delay-scheduler"
 )
 # <<<<<<< 改造点结束 >>>>>>>>>
