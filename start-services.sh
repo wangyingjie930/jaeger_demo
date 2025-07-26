@@ -74,9 +74,9 @@ for service_config in "${SERVICES[@]}"; do
     fi
 done
 
-#./../nexus-promotion/start.sh
+./../nexus-promotion/start.sh
 
-#./../nexus-order/start.sh
+./../nexus-order/start.sh
 
 
 # 编译和启动所有微服务
@@ -87,15 +87,10 @@ for service_config in "${SERVICES[@]}"; do
     echo -e "${BLUE}🔧 编译并启动 $service_name (端口: $port)...${NC}"
     binary_path="$SCRIPT_DIR/deploy/${service_name}"
     service_path="$SCRIPT_DIR/cmd/${service_name}"
-    
+
     if [ ! -d "$service_path" ]; then
-        # notification-service 没有 main.go 了，但目录可能存在
-        if [ "$service_name" == "notification-service" ]; then
-             echo -e "${YELLOW}🔍 $service_name 是一个Kafka消费者，后台运行，跳过HTTP端口检查。${NC}"
-        else
-            echo -e "${RED}❌ 服务目录不存在: $service_path${NC}"
-            continue
-        fi
+        echo -e "${RED}❌ 服务目录不存在: $service_path${NC}"
+        continue
     fi
 
     # 编译
