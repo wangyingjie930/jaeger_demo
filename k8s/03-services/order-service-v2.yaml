@@ -24,7 +24,7 @@ spec:
       containers:
         - name: order-service
           # 确保这里是你的v2版本镜像
-          image: nexus/order-service-v2:latest
+          image: yingjiewang/nexus-order-v2:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081

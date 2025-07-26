@@ -21,7 +21,7 @@ spec:
       containers:
         - name: fraud-detection-service
           # 镜像地址来自 build-all.sh 脚本
-          image: nexus/fraud-detection-service:latest
+          image: yingjiewang/nexus-fraud-detection:latest
           imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8085

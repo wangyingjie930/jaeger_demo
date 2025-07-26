@@ -17,12 +17,12 @@ jobs:
       matrix:
         # 这里的服务列表直接从你的 build-all.sh 文件中提取
         service:
-          - "inventory-service"
-          - "notification-service"
-          - "pricing-service"
-          - "fraud-detection-service"
-          - "shipping-service"
-          - "order-service-v2"
+          - "inventory"
+          - "notification"
+          - "pricing"
+          - "fraud-detection"
+          - "shipping"
+          - "order-v2"
           - "delay-scheduler"
 
     steps:
