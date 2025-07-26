@@ -1,6 +1,6 @@
 module nexus
 
-go 1.24.5
+go 1.24.0
 
 require (
 	github.com/google/uuid v1.6.0
@@ -8,7 +8,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rs/zerolog v1.34.0
 	github.com/segmentio/kafka-go v0.4.48
-	github.com/wangyingjie930/nexus-pkg v0.1.1
+	github.com/wangyingjie930/nexus-pkg v0.1.2
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 )

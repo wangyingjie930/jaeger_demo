@@ -25,7 +25,7 @@ spec:
       containers:
         - name: order-service
           # 镜像地址来自 build-all.sh 脚本
-          image: nexus/order-service:latest
+          image: yingjiewang/nexus-order:latest
           imagePullPolicy: Never  # 使用本地镜像，不从远程仓库拉取
           ports:
             - containerPort: 8081

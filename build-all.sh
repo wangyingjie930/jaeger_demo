@@ -21,14 +21,14 @@ NC='\033[0m' # No Color
 SERVICES=(
 #    "api-gateway"
 #    "order-service"
-#    "inventory-service"
-#    "notification-service"
-#    "pricing-service"
-#    "fraud-detection-service"
-#    "shipping-service"
-##    "promotion-service"
-#    "order-service-v2"
-#    "delay-scheduler"
+#    "promotion-service"
+    "inventory-service"
+    "notification-service"
+    "pricing-service"
+    "fraud-detection-service"
+    "shipping-service"
+    "order-service-v2"
+    "delay-scheduler"
 )
 
 # 检查是否传入了服务名参数
@@ -75,47 +75,9 @@ for service in "${SERVICES_TO_BUILD[@]}"; do
     echo "--------------------------------------------------"
 done
 
+docker pull yingjiewang/nexus-order:latest
+docker pull yingjiewang/nexus-promotion:latest
 
-# 定义已拆分出去的【远程服务】及其 Git 仓库地址
-# 使用两个平行数组来模拟关联数组，兼容 macOS 的 bash 3.x
-REMOTE_SERVICE_NAMES=("promotion-service")
-REMOTE_SERVICE_URLS=("https://github.com/wangyingjie930/nexus-promotion")
-
-# 临时构建目录，用于存放拉取下来的远程代码
-BUILD_DIR=$(mktemp -d)
-# 确保脚本退出时自动清理临时目录
-trap 'echo "🧹 清理临时构建目录: ${BUILD_DIR}"; rm -rf "$BUILD_DIR"' EXIT
-
-echo -e "\n${BLUE}--- Phase 2: 构建远程服务 ---${NC}"
-if [ ${#REMOTE_SERVICE_NAMES[@]} -gt 0 ]; then
-    for i in "${!REMOTE_SERVICE_NAMES[@]}"; do
-        service="${REMOTE_SERVICE_NAMES[$i]}"
-        repo_url="${REMOTE_SERVICE_URLS[$i]}"
-        echo -e "🔧 处理远程服务: ${BLUE}${service}${NC}"
-
-        echo "  - 克隆仓库: ${repo_url}"
-        # --depth 1 表示只拉取最新的commit，加快速度
-        git clone --depth 1 "${repo_url}" "${BUILD_DIR}/${service}"
-
-        IMAGE_TAG="nexus/${service}:latest"
-        ACR_IMAGE="${ACR_REGISTRY}/${service}:latest"
-
-        echo -e "🔧 正在构建服务: ${BLUE}${service}${NC}，镜像标签为: ${GREEN}${IMAGE_TAG}${NC}"
-
-        # 执行docker build命令
-        # 假设Dockerfile在当前项目根目录
-        docker build \
-            --build-arg SERVICE_NAME="${service}" \
-            -t "${IMAGE_TAG}" \
-            .
-
-        echo -e "✅ 服务 ${BLUE}${service}${NC} 构建成功！"
-
-        echo "--------------------------------------------------"
-    done
-else
-    echo "没有需要构建的远程服务。"
-fi
 
 echo -e "${GREEN}🎉 所有目标服务的镜像均已成功构建！${NC}"
 echo

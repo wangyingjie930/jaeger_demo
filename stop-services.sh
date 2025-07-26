@@ -19,6 +19,9 @@ PID_FILE="$SCRIPT_DIR/services.pid"
 
 echo -e "${BLUE}🛑 开始停止 Jaeger Demo 微服务...${NC}"
 
+./../nexus-order/stop.sh
+./../nexus-promotion/stop.sh
+
 # 检查PID文件是否存在
 if [ ! -f "$PID_FILE" ]; then
     echo -e "${YELLOW}⚠️  没有找到运行中的服务${NC}"

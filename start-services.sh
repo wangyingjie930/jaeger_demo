@@ -39,13 +39,13 @@ export NACOS_GROUP="nexus-group"   # 为项目所有服务定义一个统一的�
 # <<<<<<< 改造点: 增加新服务 >>>>>>>>>
 SERVICES=(
 #    "api-gateway:8080"
-    "order-service:8081"
+#    "order-service:8081"
+#    "promotion-service:8087"  # 新增
     "inventory-service:8082"
     "notification-service:8083" # 端口改为消费Kafka，脚本中保留便于管理
     "pricing-service:8084"
     "fraud-detection-service:8085"
     "shipping-service:8086"
-    "promotion-service:8087"  # 新增
     "delay-scheduler"
 )
 # <<<<<<< 改造点结束 >>>>>>>>>
@@ -100,20 +100,9 @@ for service_config in "${SERVICES[@]}"; do
     port="${service_config##*:}"
 
     echo -e "${BLUE}🔧 编译并启动 $service_name (端口: $port)...${NC}"
-
-    # 检查是否为远程服务
-    case "$service_name" in
-        "promotion-service")
-            service_path="$SCRIPT_DIR/../nexus-promotion/cmd"
-            echo -e "${YELLOW}🔍 $service_name 是远程服务，使用路径: $service_path${NC}"
-            ;;
-        *)
-            service_path="$SCRIPT_DIR/cmd/$service_name"
-            ;;
-    esac
-    
     binary_path="$SCRIPT_DIR/deploy/${service_name}"
-
+    service_path="$SCRIPT_DIR/cmd/${service_name}"
+    
     if [ ! -d "$service_path" ]; then
         # notification-service 没有 main.go 了，但目录可能存在
         if [ "$service_name" == "notification-service" ]; then
@@ -141,13 +130,8 @@ for service_config in "${SERVICES[@]}"; do
 done
 
 
-
-
-
-
-
-
-
+./../nexus-order/start.sh
+./../nexus-promotion/start.sh
 
 
 
